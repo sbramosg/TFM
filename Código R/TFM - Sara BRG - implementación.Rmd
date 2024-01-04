@@ -1,0 +1,4637 @@
+---
+title: "MU-TF-SBRG"
+author: "Sara Belen Ramos Gonzalez"
+date: "2023-10-28"
+output:
+  html_document:
+    toc: yes
+  word_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+# Configuración del entorno
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## Instalación y carga de Paquetes de R
+```{r warning=FALSE}
+library("utils")
+
+#install.packages("readxl")
+library(readxl)
+library(readr)
+#install.packages("skimr")
+library("skimr")
+# install.packages("ggplot2")
+library(ggplot2)
+# install.packages("dplyr")
+library(dplyr)
+# install.packages("hrbrthemes")
+library(hrbrthemes)
+# install.packages("reticulate")
+library(reticulate)
+# install.packages("corrplot")
+library(corrplot)
+#install.packages("car")
+library(car)
+#install.packages("tidyr")
+library(tidyr)
+#install.packages("dplyr")
+library(dplyr)
+#install.packages("readr")
+library(readr)
+# install.packages("randomForest")
+library(randomForest)
+#install.packages("forecast")
+library(forecast)
+#install.packages("caret")
+library(caret)
+#install.packages("usethis")
+library(usethis)
+#install.packages(c("httr", "readxl"))
+library(httr)
+library(readxl)
+```
+
+
+# Data Wrangling
+
+Se trabajará en cada uno de los apartados los datos correspondientes a los diferentes ámbitos que se han de estudiar en este proyecto.
+
+Se irá realizando un estudio de los datos disponibles y las transformaciones necesarias para que se puedan analizar adecuadamente.
+
+## Datos de Temperatura
+### Carga y transformaciones
+A continuación, se trabajarán los datos disponibles sobre la temperatura de la Tierra, desde el año 1850 hasta el actual 2023. Estos datos corresponden a las anomalías mensuales y anuales medias registradas, respecto al cálculo del promedio desde enero de 1951 a diciembre de 1980.
+
+#### Previsualización
+```{r warning=FALSE}
+# ruta  deel archivo
+# se almacenan los datos en dataframe
+Temp_Global_Averages <- read_excel("~/SBRG/MU/TF/Data Sources/Temperature land global/Berkeley/Global Monthly Averages (1850 – Recent) _tratado-TF.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(Temp_Global_Averages)
+
+# se previsualizan las últimas líneas del dataframe
+tail(Temp_Global_Averages)
+```
+
+```{r}
+str(Temp_Global_Averages)
+```
+
+
+
+#### Missing values
+Se detecta si hay valores vacíos en el dataframe  y los trataremos.
+```{r}
+sum(is.na(Temp_Global_Averages))
+```
+Efectivamente, existen datos vacíos. Se localiza entonces en qué variables tenemos esos datos vacíos.
+
+```{r}
+colSums(is.na(Temp_Global_Averages))
+```
+Tal y como se ha comprobado, los datos vacíos estarán en la columna de anomalías anuales.
+Como se trata de los primeros valores así como últimos de las medias anuales, sustituiremos los NA por los valores correspondientes al mínimo (primeros valores) y al máximo (últimos valores) en cada caso. Realizaremos entonces la imputación de los mismos.
+
+```{r}
+# reemplazamos valores según una condición en determinados campos en determinados registros
+Temp_Global_Averages$Anom_Anual[Temp_Global_Averages$Anio == 2023 & Temp_Global_Averages$Mes >= 3] <- 1.058
+Temp_Global_Averages$Anom_Anual[Temp_Global_Averages$Anio == 1850 & Temp_Global_Averages$Mes <= 5] <- -0.475
+```
+
+Revisamos ahora si tenemos valores en blanco
+```{r}
+colSums(Temp_Global_Averages=="")
+```
+Observamos que no, así que podemos concluir que nuestro conjunto de datos está completo para seguir trabajando.
+
+#### Outliers
+
+Ahora se observan de manera detenida cada uno de los valores extremos de nuestro conjunto de datos.
+
+```{r}
+outliers <- boxplot(Temp_Global_Averages$Anom_Mensual)$out
+print(outliers)
+```
+
+```{r}
+outliers <- boxplot(Temp_Global_Averages$Anom_Anual)$out
+print(outliers)
+```
+
+
+Sin embargo, la fuente de información de los números que aquí se estudian es fiable y, además, todos los valores recogidos de este tipo se observa que son relativamente cercanos entre ellos. Por lo tanto, consideramos que estos valores son mediciones correctas, si bien, denotan el comportamiento tan extremo que pueden llegar a tener las temperaturas y las altas variaciones que pueden llegar a darse.
+
+Se visualiza además que los valores extremos corresponden a valores altos, denotando esto el calentamiento cada vez más acusado de la temperatura del Planeta Tierra. 
+
+#### Análisis datos tratados
+
+```{r}
+# se previsualizan las primeras y últimas líneas del dataframe
+head(Temp_Global_Averages)
+tail(Temp_Global_Averages)
+```
+
+Se previsualiza ahora un resumen de las características de los datos con algunas medidas estadísticas.
+
+```{r}
+summary(Temp_Global_Averages)
+str(Temp_Global_Averages)
+```
+
+Observando el dato máximo, se puede descubrir qué mes del año, y en qué año, ha sido el que más variación ha sufrido respecto a la media esperada.
+
+
+```{r}
+df_max_Anom_Mensual  <- filter(Temp_Global_Averages, Anom_Mensual == "1.37")
+print (df_max_Anom_Mensual)
+```
+Se observa que agosto de 2023 es el mes que más anomalía registra de entre todos los meses de todos los años estudiados.
+
+
+Se creará ahora una variable "fecha" que combine las variables de años y meses. Y se visualiza nuevamente el conjunto de datos resultante.
+```{r}
+Temp_Global_Averages$Fecha <- as.Date(paste(Temp_Global_Averages$Anio, Temp_Global_Averages$Mes, 01), "%Y %m %d")
+head(Temp_Global_Averages)
+```
+
+Se hará ahora un recorrido y análisis de los datos resultantes tras el trabajo llevado a cabo de transformación de los mismos.
+
+
+```{r}
+
+# Plot
+Temp_Global_Averages %>%
+  
+  ggplot( aes(x=Fecha, y=Anom_Mensual)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución anomalía mensual")
+
+# Plot
+Temp_Global_Averages %>%
+  ggplot( aes(x=Fecha, y=Anom_Anual)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución anomanlía anual")
+```
+
+Se denota que, aunque en los primeros años visualizados había bastante contraste de anomalías según los meses, ya que variaba de un mes a otro; en los últimos años estas anomalías siguen un patrón más estable, variando menos de unos meses a otros, y tendiendo siempre a alcanzar anomalías más elevadas.
+
+Se puede analizar el comportamiento de los datos según meses, observando sus valores estadísticos.
+
+```{r}
+months = split(as.numeric(Temp_Global_Averages$Anom_Anual), Temp_Global_Averages$Mes)
+sapply(months, summary)
+```
+```{r}
+
+# Agregar una nueva columna de secuencia
+Temp_Global_Averages$secuencia <- seq(1, nrow(Temp_Global_Averages))
+
+# Imprimir el dataframe resultante
+print(Temp_Global_Averages)
+```
+
+Se hace un estudio de regresión lineal para entender si la variación de los valores tiene una tendencia con el paso del tiempo 
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ Anom_Anual, data = Temp_Global_Averages)
+summary(model)
+```
+La precisión de este modelo será aceptable, con un coeficiente R^2= 0.76.
+```{r}
+# Creamos el gráfico de la regresión
+
+ggplot(Temp_Global_Averages, aes(x = secuencia , y = Anom_Anual)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre el paso de los años y la temperatura anómala media anual")+
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+Se almacena el conjunto de datos con las operaciones de data wrangling ya ejecutadas para posteriormente usarlo en la visualización de datos que realizaremos mediante Power BI.
+
+```{r warning=FALSE}
+setwd("~/SBRG/MU/TF/Data Sources/TF_SBRG/exports/")
+# Nombre del archivo exportado: Temp_Global_Averages_Rstudio.csv
+ write.csv(Temp_Global_Averages, "Temp_Global_Averages_Rstudio.csv", row.names = TRUE)
+```
+
+#### Conclusiones tras observación
+- Se visualiza que los meses donde mayores son los valores de las anomalías mensuales son los que corresponden al invierno, concretamente durante los meses enero, febrero, marzo,diciembre. Por lo tanto, los meses más fríos del año cada vez se están convirtiendo en más calurosos.
+- Si se analiza ahora en los valores mínimos de anomalías, vemos que se producen en los meses también de enero y febrero.
+- Se concluye entonces que los meses de invierno, enero y febrero, son los que están sufriendo mayor cambio de temperatura .
+
+- Claramente los datos presentan una tendencia al alza, con una pendiente bastante pronunciada, y se denota un crecimiento a un ritmo muy alto a partir del año 1975.
+
+
+### Estudio meses
+
+Se analizará ahora de manera pormenorizada cómo se comporta cada uno de los meses en función a los valores de anomalías mensuales, con el fin de detectar qué meses son los que más están modificando su comportamiento ante la elevación de temperaturas producidas en los últimos años.
+
+
+
+```{r}
+Temp_Global_Averages_Month <- Temp_Global_Averages[, c("Anio", "Mes", "Anom_Mensual")]
+head (Temp_Global_Averages_Month)
+```
+
+
+```{r}
+# pivotamos los datos por si hiciera falta anlizar los meses aislados posteriormente y le cambiamos los nombres a las columnas para poder usarlos
+Temp_Global_Averages_Month_pivot <- Temp_Global_Averages_Month %>%
+  pivot_wider(
+    names_from = Mes,
+    values_from = Anom_Mensual
+    #values_fill = 0 # imputamos si hay valores nulos a 0
+  )
+
+colnames(Temp_Global_Averages_Month_pivot) <- c("Anio", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+
+head (Temp_Global_Averages_Month_pivot)
+```
+
+#### Enero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Jan ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+
+
+
+#### Febrero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Feb)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Feb ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+
+
+#### Marzo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Mar)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Mar ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+
+#### Abril
+
+```{r}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Apr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Apr ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+
+
+#### Mayo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = May)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(May ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+#### Junio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Jun)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Jun ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+
+#### Julio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Jul)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Jul ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+#### Agosto
+
+```{r}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Aug)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Aug ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+#### Septiembre
+
+```{r warning=FALSE}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Sep)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Sep ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+#### Octubre
+
+```{r warning=FALSE}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Oct)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Oct ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+#### Noviembre
+
+```{r warning=FALSE}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Nov)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Nov ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+#### Diciembre
+
+```{r warning=FALSE}
+# Se dibuja el gráfico
+ggplot(Temp_Global_Averages_Month_pivot, aes(x = Anio, y = Dec)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las temperaturas y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+```{r}
+# Ajustar un modelo lineal
+model <- lm(Dec ~ Anio, data = Temp_Global_Averages_Month_pivot)
+
+# Imprimir resumen del modelo
+summary(model)
+
+# Obtener la pendiente del modelo
+pendiente <- coef(model)[2]
+
+# Imprimir el valor de la pendiente
+print(pendiente)
+```
+
+#### Conclusiones tras observación
+Se ha realizado un estudio detallado de la pendiente de las rectas de regresión que explican la tendencia creciente de las temperaturas a lo largo de los años. De este estudio se concluye que precisamente los meses con una pendiente más pronunciada corresponden a la estación más fría del año (invierno), siendo marzo el mes que está experimentando mayor crecimiento de temperatura. En el top 5 se encuentran también diciembre, enero, febrero, abril. Por lo tanto, queda demostrado que tendemos a un cambio de clima en el que predominarán los días cálidos sobre los más fríos.
+
+De hecho, esta conclusión coincide con la que ya se deducía al analizar los valores máximos de las anomalías para cada uno de los meses.
+
+## Datos de Precipitaciones
+Estudiaremos ahora los datos correspondientes a las lluvias de los países más representativos a nivel mundial de la agricultura, y que a su vez, representen distintas zonas del planeta.
+
+### Datos globales - China
+A continuación, se trabajarán los datos disponibles sobre mm de precipitación de China, desde el año 1901 hasta el 2021. 
+
+#### Carga y transformaciones
+```{r warning=FALSE}
+# ruta  deel archivo
+# se almacenan los datos en dataframe
+pr_CHN <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/pr_timeseries_monthly_cru_1901-2021_CHN.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(pr_CHN)
+
+# se previsualizan las últimas líneas del dataframe
+tail(pr_CHN)
+```
+Necesitaremos ahora hacer un "unpivot" a los datos para poder trabajarlos
+
+```{r}
+pr_CHN_pivot <- pr_CHN %>% 
+  pivot_longer(
+    cols = !anio, 
+    names_to = "mes", 
+    values_to = "pr"
+  )
+
+head(pr_CHN_pivot)
+```
+
+Ahora convertimos los nombres de los meses a sus códigos numéricos para poder obtener un dato de fecha más tarde
+```{r}
+# reemplazamos valores según una condición
+# Replace Values Based on Condition
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Jan'] <- 1
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Feb'] <- 2
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Mar'] <- 3
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Apr'] <- 4
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'May'] <- 5
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Jun'] <- 6
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Jul'] <- 7
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Aug'] <- 8
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Sep'] <- 9
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Oct'] <- 10
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Nov'] <- 11
+pr_CHN_pivot$mes[pr_CHN_pivot$mes == 'Dec'] <- 12
+```
+
+
+Se creará una variable "fecha" que combine las variables de años y meses. Y se visualiza nuevamente el conjunto de datos resultante.
+```{r}
+pr_CHN_pivot$Fecha <- as.Date(paste(pr_CHN_pivot$anio, pr_CHN_pivot$mes, 01), "%Y %m %d")
+head(pr_CHN_pivot)
+```
+
+Se hará ahora un recorrido y análisis de los datos resultantes tras el trabajo llevado a cabo de transformación de los mismos
+
+#### Visualización datos
+
+```{r}
+# Plot
+pr_CHN_pivot %>%
+  
+  ggplot( aes(x=Fecha, y=pr)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución precipitaciones anuales")
+```
+
+```{r}
+# Agregar una nueva columna de secuencia
+pr_CHN_pivot$secuencia <- seq(1, nrow(pr_CHN_pivot))
+
+# Imprimir el dataframe resultante
+print(pr_CHN_pivot)
+```
+
+
+Se hace un estudio de regresión lineal para entender si la variación de los valores tiene una tendencia con el paso del tiempo 
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ pr, data = pr_CHN_pivot)
+summary(model)
+```
+
+```{r}
+# Creamos el gráfico
+ggplot(pr_CHN_pivot, aes(x = secuencia, y = pr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+Se almacena el conjunto de datos con las operaciones de data wrangling ya ejecutadas para posteriormente usarlo en la visualización de datos que realizaremos mediante Power BI.
+
+```{r warning=FALSE}
+setwd("~/SBRG/MU/TF/Data Sources/TF_SBRG/exports/")
+# Nombre del archivo exportado: Temp_Global_Averages_Rstudio.csv
+ write.csv(pr_CHN_pivot, "pr_CHN_pivot_Rstudio.csv", row.names = TRUE)
+```
+
+#### Conclusiones tras observación
+Si se estudian las precitipitaciones, se oberva que no hay mucha variación en cuanto al tiempo se refiere. Sin embargo, existen numerosos estudios que hablan sobre una modificación en el patrón de las precipitaciones debido a la agricultura. Se supone entonces que esto podría influir a nivel del comportamiento en la forma de lluvia, más que a nivel de cantidad, puesto que, tal y como se refleja en los datos estudiados, tenemos los similares valores en cuanto a milímetros de lluvia a lo largo de los años.
+
+Esto lleva a plantearse las concluiones que se obtendrían si estudiáramos los meses de manera aislada, por asegurar algo más lo que dicen los datos.
+
+### Estudio meses - China
+#### Enero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+#### Febrero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Feb)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+
+
+#### Marzo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Mar)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+#### Abril
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Apr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Mayo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = May)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+#### Junio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Jun)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Julio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Jul)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Agosto
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Aug)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+#### Septiembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Sep)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Octubre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Oct)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Noviembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Nov)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Diciembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_CHN, aes(x = anio, y = Dec)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre las precipitaciones y el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Conclusiones datos meses - China
+
+- En agosto, se evidencia una menor cantidad de lluvia. El mes más caluroso del año, también está siendo el más seco. 
+- En noviembre, los valores bajos son bastante menores en los últimos años, y lo mismo ocurre con los valores altos.
+- En septiembre, comenzamos a ver valores máximos y mínimos muy distanciados. Aumenta el rango de los datos observados. Aumenta la inestabilidad climática.
+- En junio, siendo un mes caluroso de verano, se observa que los datos tienden al alza. Este tipo de lluvias, producidas con temperaturas tan altas, no atienden a un patrón de comportamiento usual. 
+- En marzo, encontramos algún pico bastante alto de lluvia.
+
+Con estas observaciones, es evidente el cambio del patrón del comportamiento en cuanto a las precipitaciones. Si bien no implica una escasez de las mismas, conlleva una variación respecto a los valores que eran usuales hace muchos años. Entonces, tal como se ha comprobado con estas visualizaciones, no es la cantidad el aspecto que preocupa sobre las precipitaciones. 
+
+Hay que mencionar las interpretaciones de estudios que indican que esta modificación del comportamiento de las lluvias va unida a una intensificación modificada , así como una frecuencia que va en aumento. Y precisamente son estas las variables que justifican los periodos de sequía a los que nos hemos enfrentado en los últimos años.
+
+Hay que mencionar también que los investigadores han encontrado que el aumento de la temperatura global (que además se ha dejado latente en este TFM) está provocando un aumento de la cantidad de vapor de agua en la atmósfera. El vapor de agua es el principal componente de las nubes, por lo que un aumento de su concentración hace que las nubes sean más capaces de producir lluvias intensas.
+
+Los estudios científicos sobre lluvias torrenciales en verano han demostrado que estos fenómenos son cada vez más frecuentes e intensos, y sugieren que cada vez son más frecuentes. Se ha demostrado también que lluvias de la última década, en algunas zonas del planeta, fueron entre un 10% y un 20% más intensas de lo que habrían sido en un mundo sin cambio climático.
+
+Lo que realmente preocupa sobre las precipitaciones es el comportamiento de las mismas, el cuál es una amenaza cada vez mayor para las comunidades de todo el mundo, ya que requieren una modificación en aspectos como la planificación del uso del suelo, el dimensionamiento de la infraestructura de drenaje, e incluso la educación pública para la formación en materia de seguridad ante inundaciones.
+
+
+
+
+
+### Datos globales - Brasil
+A continuación, se trabajarán los datos disponibles sobre mm de precipitación de Brasil, desde el año 1901 hasta el 2022. 
+
+#### Carga y transformaciones
+```{r warning=FALSE}
+# ruta  del archivo
+# se almacenan los datos en dataframe
+pr_BRA <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/pr_timeseries_monthly_1901-2022_BRA.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(pr_BRA)
+
+# se previsualizan las últimas líneas del dataframe
+tail(pr_BRA)
+```
+
+
+
+
+```{r}
+# pivotamos los datos por si hiciera falta anlizar los meses aislados posteriormente y le cambiamos los nombres a las columnas para poder usarlos
+pr_BRA_pivot <- pr_BRA %>%
+  pivot_wider(
+    names_from = mes,
+    values_from = pr,
+    values_fill = 0 # imputamos si hay valores nulos a 0
+  )
+
+colnames(pr_BRA_pivot) <- c("anio", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+
+head (pr_BRA_pivot)
+```
+
+Se creará una variable "fecha" que combine las variables de años y meses. Y se visualiza nuevamente el conjunto de datos resultante.
+```{r}
+pr_BRA$Fecha <- as.Date(paste(pr_BRA$anio, pr_BRA$mes, 01), "%Y %m %d")
+head(pr_BRA)
+```
+
+Se hará ahora un recorrido y análisis de los datos resultantes tras el trabajo llevado a cabo de transformación de los mismos
+
+#### Visualización datos
+
+```{r}
+# Plot
+pr_BRA %>%
+  
+  ggplot( aes(x=Fecha, y=pr)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución precipitaciones anuales")
+```
+
+
+```{r}
+pr_BRA <- pr_BRA %>% arrange(Fecha)
+head(pr_BRA)
+# Agregar una nueva columna de secuencia
+pr_BRA$secuencia <- seq(1, nrow(pr_BRA))
+
+# Imprimir el dataframe resultante
+print(pr_BRA)
+```
+
+Se hace un estudio de regresión lineal para entender si la variación de los valores tiene una tendencia con el paso del tiempo 
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ pr, data = pr_BRA)
+summary(model)
+```
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA, aes(x = secuencia, y = pr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación (pr) y la el paso del tiempo (secuencia)")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+#### Conclusiones tras observación
+
+Tal y como se puede apreciar, no hay un cambio de comportamiento aparecente a lo largo de los años en las precipitaciones de Brasil. Aún así, vamos a estudiar meses en concreto por si viéramos un cambio estacional.
+
+
+### Estudio meses - Brasil
+#### Enero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Febrero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Marzo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Mar)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Abril
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Apr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Mayo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = May)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Junio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Jun)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Julio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Jul)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Agosto
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Aug)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Septiembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Sep)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Octubre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Oct)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Noviembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Nov)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Diciembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_BRA_pivot, aes(x = anio, y = Dec)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+
+```
+
+
+#### Conclusiones datos - Brasil
+Aunque no se percibe así en el estudio global de todos los meses del año, en el análisis aislado de los meses, sí se evidencia en varios de los mismos valores bajos, muy bajos en los últimos años en comparación con los primeros años de nuestros datos.
+
+En Brasil, se nota más que en el caso de China la variación que se está produciendo en el patrón de lluvias que se está observando.
+
+
+
+
+### Datos globales - España
+A continuación, se trabajarán los datos disponibles sobre mm de precipitación de España, desde el año 1901 hasta el 2021. 
+
+####  Carga y transformaciones
+```{r warning=FALSE}
+# ruta  del archivo
+# se almacenan los datos en dataframe
+pr_ESP <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/pr_timeseries_monthly_cru_1901-2021_ESP.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(pr_ESP)
+
+# se previsualizan las últimas líneas del dataframe
+tail(pr_ESP)
+```
+
+
+Necesitaremos ahora hacer un "unpivot" a los datos para poder trabajarlos
+
+```{r}
+pr_ESP_pivot <- pr_ESP %>% 
+  pivot_longer(
+    cols = !anio, 
+    names_to = "mes", 
+    values_to = "pr"
+  )
+
+head(pr_ESP_pivot)
+```
+
+Ahora convertimos los nombres de los meses a sus códigos numéricos para poder obtener un dato de fecha más tarde
+```{r}
+# reemplazamos valores según una condición
+# Replace Values Based on Condition
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Jan'] <- 1
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Feb'] <- 2
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Mar'] <- 3
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Apr'] <- 4
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'May'] <- 5
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Jun'] <- 6
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Jul'] <- 7
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Aug'] <- 8
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Sep'] <- 9
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Oct'] <- 10
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Nov'] <- 11
+pr_ESP_pivot$mes[pr_ESP_pivot$mes == 'Dec'] <- 12
+```
+
+Se creará una variable "fecha" que combine las variables de años y meses. Y se visualiza nuevamente el conjunto de datos resultante.
+```{r}
+pr_ESP_pivot$Fecha <- as.Date(paste(pr_ESP_pivot$anio, pr_ESP_pivot$mes, 01), "%Y %m %d")
+head(pr_ESP_pivot)
+```
+
+Se hará ahora un recorrido y análisis de los datos resultantes tras el trabajo llevado a cabo de transformación de los mismos
+
+#### Visualización datos
+
+```{r}
+# Plot
+pr_ESP_pivot %>%
+  
+  ggplot( aes(x=Fecha, y=pr)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución precipitaciones anuales")
+```
+
+
+```{r}
+pr_ESP_pivot <- pr_ESP_pivot %>% arrange(Fecha)
+head(pr_ESP_pivot)
+# Agregar una nueva columna de secuencia
+pr_ESP_pivot$secuencia <- seq(1, nrow(pr_ESP_pivot))
+
+# Imprimir el dataframe resultante
+print(pr_ESP_pivot)
+```
+
+Se hace un estudio de regresión lineal para entender si la variación de los valores tiene una tendencia con el paso del tiempo 
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ pr, data = pr_ESP_pivot)
+summary(model)
+```
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP_pivot, aes(x = secuencia, y = pr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación (pr) y la el paso del tiempo (secuencia)")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+#### Conclusiones tras observación
+
+Tal y como se puede apreciar, no hay un cambio de comportamiento aparentemente a lo largo de los años en las precipitaciones de España. Aún así, vamos a estudiar meses en concreto por si viéramos un cambio estacional.
+
+
+### Estudio meses - España
+#### Enero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Febrero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Marzo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Mar)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Abril
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Apr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Mayo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = May)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Junio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Jun)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Julio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Jul)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Agosto
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Aug)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Septiembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Sep)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Octubre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Oct)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Noviembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Nov)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Diciembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ESP, aes(x = anio, y = Dec)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+
+```
+
+
+#### Conclusiones datos - España
+Aunque no se percibe así en el estudio global de todos los meses del año, en el análisis aislado de los meses, sí se denota un cambio de patrón de comportamiento en algunos meses específicos. En marzo, junio, y sobre todo en agosto, denotamos picos altos de lluvias bastante elevados. De hecho, comprobamos en varios estudios científicos que en agosto, en Esapaña, llueve más torrencialmente que en cualquier otro mes del año.
+
+
+Por un lado, se ha demostrado que a finales de agosto, las masas de aire caliente y seco del verano comienzan a ser reemplazadas por masas de aire más frías y húmedas procedentes del norte de Europa. Este contraste de temperaturas y humedades favorece la formación de tormentas. Por otro lado, la temperatura del suelo y del mar es también más alta en agosto que en otros meses del año. Esto contribuye a aumentar la inestabilidad atmosférica y, consecuentemente, la probabilidad de tormentas.
+
+
+
+
+
+### Datos globales - India
+A continuación, se trabajarán los datos disponibles sobre mm de precipitación de la India, desde el año 1901 hasta el 2021. 
+
+####  Carga y transformaciones
+```{r warning=FALSE}
+# ruta  del archivo
+# se almacenan los datos en dataframe
+pr_IND <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/pr_timeseries_monthly_cru_1901-2021_IND.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(pr_IND)
+
+# se previsualizan las últimas líneas del dataframe
+tail(pr_IND)
+```
+
+
+Necesitaremos ahora hacer un "unpivot" a los datos para poder trabajarlos
+
+```{r}
+pr_IND_pivot <- pr_IND %>% 
+  pivot_longer(
+    cols = !anio, 
+    names_to = "mes", 
+    values_to = "pr"
+  )
+
+head(pr_IND_pivot)
+```
+
+Ahora convertimos los nombres de los meses a sus códigos numéricos para poder obtener un dato de fecha más tarde
+```{r}
+# reemplazamos valores según una condición
+# Replace Values Based on Condition
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Jan'] <- 1
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Feb'] <- 2
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Mar'] <- 3
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Apr'] <- 4
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'May'] <- 5
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Jun'] <- 6
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Jul'] <- 7
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Aug'] <- 8
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Sep'] <- 9
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Oct'] <- 10
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Nov'] <- 11
+pr_IND_pivot$mes[pr_IND_pivot$mes == 'Dec'] <- 12
+```
+
+Se creará una variable "fecha" que combine las variables de años y meses. Y se visualiza nuevamente el conjunto de datos resultante.
+```{r}
+pr_IND_pivot$Fecha <- as.Date(paste(pr_IND_pivot$anio, pr_IND_pivot$mes, 01), "%Y %m %d")
+head(pr_IND_pivot)
+```
+
+Se hará ahora un recorrido y análisis de los datos resultantes tras el trabajo llevado a cabo de transformación de los mismos
+
+#### Visualización datos
+
+```{r}
+# Plot
+pr_IND_pivot %>%
+  
+  ggplot( aes(x=Fecha, y=pr)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución precipitaciones anuales")
+```
+
+
+```{r}
+pr_IND_pivot <- pr_IND_pivot %>% arrange(Fecha)
+head(pr_IND_pivot)
+# Agregar una nueva columna de secuencia
+pr_IND_pivot$secuencia <- seq(1, nrow(pr_IND_pivot))
+
+# Imprimir el dataframe resultante
+print(pr_IND_pivot)
+```
+
+Se hace un estudio de regresión lineal para entender si la variación de los valores tiene una tendencia con el paso del tiempo 
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ pr, data = pr_IND_pivot)
+summary(model)
+```
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND_pivot, aes(x = secuencia, y = pr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación (pr) y la el paso del tiempo (secuencia)")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+#### Conclusiones tras observación
+
+Tal y como se puede apreciar, no hay un cambio de comportamiento aparecente a lo largo de los años en las precipitaciones de España. Aún así, vamos a estudiar meses en concreto por si viéramos un cambio estacional.
+
+
+### Estudio meses - India
+#### Enero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Febrero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Marzo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Mar)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Abril
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Apr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Mayo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = May)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Junio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Jun)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Julio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Jul)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Agosto
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Aug)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Septiembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Sep)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Octubre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Oct)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Noviembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Nov)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Diciembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_IND, aes(x = anio, y = Dec)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+
+```
+
+
+#### Conclusiones datos - India
+De manera similar a los otros países estudiados, no se observa una modificación drástica en la cantidad de lluvia registrada. Sin embargo, lo que sí comentan numerosos estudios científicos es la modificación en el patrón de comportamiento de las precitpitaciones, siendo estás más intensas y frecuentes en los últimos años.
+
+
+
+
+### Datos globales - Méjico
+A continuación, se trabajarán los datos disponibles sobre mm de precipitación de la Méjico, desde el año 1901 hasta el 2021. 
+
+####  Carga y transformaciones
+```{r warning=FALSE}
+# ruta  del archivo
+# se almacenan los datos en dataframe
+pr_MEX <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/pr_timeseries_monthly_cru_1901-2021_MEX.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(pr_MEX)
+
+# se previsualizan las últimas líneas del dataframe
+tail(pr_MEX)
+```
+
+
+Necesitaremos ahora hacer un "unpivot" a los datos para poder trabajarlos
+
+```{r}
+pr_MEX_pivot <- pr_MEX %>% 
+  pivot_longer(
+    cols = !anio, 
+    names_to = "mes", 
+    values_to = "pr"
+  )
+
+head(pr_MEX_pivot)
+```
+
+Ahora convertimos los nombres de los meses a sus códigos numéricos para poder obtener un dato de fecha más tarde
+```{r}
+# reemplazamos valores según una condición
+# Replace Values Based on Condition
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Jan'] <- 1
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Feb'] <- 2
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Mar'] <- 3
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Apr'] <- 4
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'May'] <- 5
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Jun'] <- 6
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Jul'] <- 7
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Aug'] <- 8
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Sep'] <- 9
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Oct'] <- 10
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Nov'] <- 11
+pr_MEX_pivot$mes[pr_MEX_pivot$mes == 'Dec'] <- 12
+```
+
+Se creará una variable "fecha" que combine las variables de años y meses. Y se visualiza nuevamente el conjunto de datos resultante.
+```{r}
+pr_MEX_pivot$Fecha <- as.Date(paste(pr_MEX_pivot$anio, pr_MEX_pivot$mes, 01), "%Y %m %d")
+head(pr_MEX_pivot)
+```
+
+Se hará ahora un recorrido y análisis de los datos resultantes tras el trabajo llevado a cabo de transformación de los mismos
+
+#### Visualización datos
+
+```{r}
+# Plot
+pr_MEX_pivot %>%
+  
+  ggplot( aes(x=Fecha, y=pr)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución precipitaciones anuales")
+```
+
+
+```{r}
+pr_MEX_pivot <- pr_MEX_pivot %>% arrange(Fecha)
+head(pr_MEX_pivot)
+# Agregar una nueva columna de secuencia
+pr_MEX_pivot$secuencia <- seq(1, nrow(pr_MEX_pivot))
+
+# Imprimir el dataframe resultante
+print(pr_MEX_pivot)
+```
+
+Se hace un estudio de regresión lineal para entender si la variación de los valores tiene una tendencia con el paso del tiempo 
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ pr, data = pr_MEX_pivot)
+summary(model)
+```
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX_pivot, aes(x = secuencia, y = pr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación (pr) y la el paso del tiempo (secuencia)")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+#### Conclusiones tras observación
+
+A diferencia de los otros países estudiados, aquí vemos un ligero aumento en la cantidad de precipitaciones en los últimos años.
+
+
+### Estudio meses - Méjico
+#### Enero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Febrero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Marzo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Mar)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Abril
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Apr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Mayo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = May)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Junio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Jun)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Julio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Jul)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Agosto
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Aug)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Septiembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Sep)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Octubre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Oct)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Noviembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Nov)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Diciembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_MEX, aes(x = anio, y = Dec)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+
+```
+
+
+#### Conclusiones datos - Méjico
+En el caso de Méjico, tras el estudio pormenorizado para cada uno de los meses, podemos decir incluso que aumenta la cantidad de lluvia.
+
+
+
+
+
+### Datos globales - Reino Unido
+A continuación, se trabajarán los datos disponibles sobre mm de precipitación de Reino Unido, desde el año 1901 hasta el 2021. 
+
+####  Carga y transformaciones
+```{r warning=FALSE}
+# ruta  del archivo
+# se almacenan los datos en dataframe
+pr_GBR <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/pr_timeseries_monthly_cru_1901-2021_GBR.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(pr_GBR)
+
+# se previsualizan las últimas líneas del dataframe
+tail(pr_GBR)
+```
+
+
+Necesitaremos ahora hacer un "unpivot" a los datos para poder trabajarlos
+
+```{r}
+pr_GBR_pivot <- pr_GBR %>% 
+  pivot_longer(
+    cols = !anio, 
+    names_to = "mes", 
+    values_to = "pr"
+  )
+
+head(pr_GBR_pivot)
+```
+
+Ahora convertimos los nombres de los meses a sus códigos numéricos para poder obtener un dato de fecha más tarde
+```{r}
+# reemplazamos valores según una condición
+# Replace Values Based on Condition
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Jan'] <- 1
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Feb'] <- 2
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Mar'] <- 3
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Apr'] <- 4
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'May'] <- 5
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Jun'] <- 6
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Jul'] <- 7
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Aug'] <- 8
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Sep'] <- 9
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Oct'] <- 10
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Nov'] <- 11
+pr_GBR_pivot$mes[pr_GBR_pivot$mes == 'Dec'] <- 12
+```
+
+Se creará una variable "fecha" que combine las variables de años y meses. Y se visualiza nuevamente el conjunto de datos resultante.
+```{r}
+pr_GBR_pivot$Fecha <- as.Date(paste(pr_GBR_pivot$anio, pr_GBR_pivot$mes, 01), "%Y %m %d")
+head(pr_GBR_pivot)
+```
+### Datos tratados - Reino Unido
+
+Se hará ahora un recorrido y análisis de los datos resultantes tras el trabajo llevado a cabo de transformación de los mismos
+
+#### Visualización datos
+
+```{r}
+# Plot
+pr_GBR_pivot %>%
+  
+  ggplot( aes(x=Fecha, y=pr)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución precipitaciones anuales")
+```
+
+
+```{r}
+pr_GBR_pivot <- pr_GBR_pivot %>% arrange(Fecha)
+head(pr_GBR_pivot)
+# Agregar una nueva columna de secuencia
+pr_GBR_pivot$secuencia <- seq(1, nrow(pr_GBR_pivot))
+
+# Imprimir el dataframe resultante
+print(pr_GBR_pivot)
+```
+
+Se hace un estudio de regresión lineal para entender si la variación de los valores tiene una tendencia con el paso del tiempo 
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ pr, data = pr_GBR_pivot)
+summary(model)
+```
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR_pivot, aes(x = secuencia, y = pr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación (pr) y la el paso del tiempo (secuencia)")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+#### Conclusiones tras observación
+
+Al igual que ocurría con Méjico, aquí vemos también un ligero aumento en la cantidad de precipitaciones en los últimos años.
+
+
+### Estudio meses - Reino Unido
+#### Enero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Febrero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Marzo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Mar)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Abril
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Apr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Mayo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = May)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Junio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Jun)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Julio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Jul)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Agosto
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Aug)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Septiembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Sep)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Octubre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Oct)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Noviembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Nov)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Diciembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_GBR, aes(x = anio, y = Dec)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+
+```
+
+
+#### Conclusiones datos - Reino Unido
+Después de las observaciones realizadas, se puede concluir que en el caso de Reino Unido la cantidad de lluvia registrada durante los últimos años tiende a ser mayor.
+
+
+
+
+
+### Datos globales - Italia
+A continuación, se trabajarán los datos disponibles sobre mm de precipitación de Italia, desde el año 1901 hasta el 2021. 
+####  Carga y transformaciones
+
+```{r warning=FALSE}
+# ruta  del archivo
+# se almacenan los datos en dataframe
+pr_ITA <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/pr_timeseries_monthly_cru_1901-2021_ITA.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(pr_ITA)
+
+# se previsualizan las últimas líneas del dataframe
+tail(pr_ITA)
+```
+
+
+Necesitaremos ahora hacer un "unpivot" a los datos para poder trabajarlos
+
+```{r}
+pr_ITA_pivot <- pr_ITA %>% 
+  pivot_longer(
+    cols = !anio, 
+    names_to = "mes", 
+    values_to = "pr"
+  )
+
+head(pr_ITA_pivot)
+```
+
+Ahora convertimos los nombres de los meses a sus códigos numéricos para poder obtener un dato de fecha más tarde
+```{r}
+# reemplazamos valores según una condición
+# Replace Values Based on Condition
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Jan'] <- 1
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Feb'] <- 2
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Mar'] <- 3
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Apr'] <- 4
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'May'] <- 5
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Jun'] <- 6
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Jul'] <- 7
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Aug'] <- 8
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Sep'] <- 9
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Oct'] <- 10
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Nov'] <- 11
+pr_ITA_pivot$mes[pr_ITA_pivot$mes == 'Dec'] <- 12
+```
+
+Se creará una variable "fecha" que combine las variables de años y meses. Y se visualiza nuevamente el conjunto de datos resultante.
+```{r}
+pr_ITA_pivot$Fecha <- as.Date(paste(pr_ITA_pivot$anio, pr_ITA_pivot$mes, 01), "%Y %m %d")
+head(pr_ITA_pivot)
+```
+
+Se hará ahora un recorrido y análisis de los datos resultantes tras el trabajo llevado a cabo de transformación de los mismos
+
+#### Visualización datos
+
+```{r}
+# Plot
+pr_ITA_pivot %>%
+  
+  ggplot( aes(x=Fecha, y=pr)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución precipitaciones anuales")
+```
+
+
+```{r}
+pr_ITA_pivot <- pr_ITA_pivot %>% arrange(Fecha)
+head(pr_ITA_pivot)
+# Agregar una nueva columna de secuencia
+pr_ITA_pivot$secuencia <- seq(1, nrow(pr_ITA_pivot))
+
+# Imprimir el dataframe resultante
+print(pr_ITA_pivot)
+```
+
+Se hace un estudio de regresión lineal para entender si la variación de los valores tiene una tendencia con el paso del tiempo 
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ pr, data = pr_ITA_pivot)
+summary(model)
+```
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA_pivot, aes(x = secuencia, y = pr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación (pr) y la el paso del tiempo (secuencia)")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+#### Conclusiones tras observación
+
+En Italia se detecta que es precisamente durante los últimos años cuando se ha producido el valor más alto de precipitación registrado.
+
+
+### Estudio meses - Italia
+#### Enero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Febrero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Marzo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Mar)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Abril
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Apr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Mayo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = May)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Junio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Jun)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Julio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Jul)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Agosto
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Aug)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Septiembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Sep)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Octubre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Oct)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Noviembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Nov)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Diciembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ITA, aes(x = anio, y = Dec)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+
+```
+
+
+#### Conclusiones datos - Italia
+Siendo países bastante cercanos, se observa que en Italia, al igual que en España, es agosto el mes en el que más ha incrementado la frecuencia de los picos altos de valores.
+
+
+
+
+### Datos globales - Estados Unidos
+A continuación, se trabajarán los datos disponibles sobre mm de precipitación de Estados Unidos, desde el año 1901 hasta el 2021. 
+####  Carga y transformaciones
+
+```{r warning=FALSE}
+# ruta  del archivo
+# se almacenan los datos en dataframe
+pr_USA <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/pr_timeseries_monthly_cru_1901-2021_USA.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(pr_USA)
+
+# se previsualizan las últimas líneas del dataframe
+tail(pr_USA)
+```
+
+
+Necesitaremos ahora hacer un "unpivot" a los datos para poder trabajarlos
+
+```{r}
+pr_USA_pivot <- pr_USA %>% 
+  pivot_longer(
+    cols = !anio, 
+    names_to = "mes", 
+    values_to = "pr"
+  )
+
+head(pr_USA_pivot)
+```
+
+Ahora convertimos los nombres de los meses a sus códigos numéricos para poder obtener un dato de fecha más tarde
+```{r}
+# reemplazamos valores según una condición
+# Replace Values Based on Condition
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Jan'] <- 1
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Feb'] <- 2
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Mar'] <- 3
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Apr'] <- 4
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'May'] <- 5
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Jun'] <- 6
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Jul'] <- 7
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Aug'] <- 8
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Sep'] <- 9
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Oct'] <- 10
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Nov'] <- 11
+pr_USA_pivot$mes[pr_USA_pivot$mes == 'Dec'] <- 12
+```
+
+Se creará una variable "fecha" que combine las variables de años y meses. Y se visualiza nuevamente el conjunto de datos resultante.
+```{r}
+pr_USA_pivot$Fecha <- as.Date(paste(pr_USA_pivot$anio, pr_USA_pivot$mes, 01), "%Y %m %d")
+head(pr_USA_pivot)
+```
+
+Se hará ahora un recorrido y análisis de los datos resultantes tras el trabajo llevado a cabo de transformación de los mismos
+
+#### Visualización datos
+
+```{r}
+# Plot
+pr_USA_pivot %>%
+  
+  ggplot( aes(x=Fecha, y=pr)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución precipitaciones anuales")
+```
+
+
+```{r}
+pr_USA_pivot <- pr_USA_pivot %>% arrange(Fecha)
+head(pr_USA_pivot)
+# Agregar una nueva columna de secuencia
+pr_USA_pivot$secuencia <- seq(1, nrow(pr_USA_pivot))
+
+# Imprimir el dataframe resultante
+print(pr_USA_pivot)
+```
+
+Se hace un estudio de regresión lineal para entender si la variación de los valores tiene una tendencia con el paso del tiempo 
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ pr, data = pr_USA_pivot)
+summary(model)
+```
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA_pivot, aes(x = secuencia, y = pr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación (pr) y la el paso del tiempo (secuencia)")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+#### Conclusiones tras observación
+
+En Estados Unidos se observa cierto patrón de aumento an la cantidad de las precipitaciones en términos generales.
+
+
+### Estudio meses - Estados Unidos
+#### Enero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Febrero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Marzo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Mar)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Abril
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Apr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Mayo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = May)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Junio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Jun)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Julio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Jul)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Agosto
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Aug)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Septiembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Sep)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Octubre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Oct)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Noviembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Nov)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Diciembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_USA, aes(x = anio, y = Dec)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+
+```
+
+
+#### Conclusiones datos - Estados Unidos
+Efectivamente, concluimos que existe tendencia al aumento de la cantidad de lluvia para Estados Unidos, sobre todo en los últimos años de los datos disponibles.
+
+
+
+
+### Datos globales - Sudáfrica
+A continuación, se trabajarán los datos disponibles sobre mm de precipitación de Sudáfrica, desde el año 1901 hasta el 2021. 
+
+####  Carga y transformaciones
+```{r warning=FALSE}
+# ruta  del archivo
+# se almacenan los datos en dataframe
+pr_ZAF <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/pr_timeseries_monthly_cru_1901-2021_ZAF.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(pr_ZAF)
+
+# se previsualizan las últimas líneas del dataframe
+tail(pr_ZAF)
+```
+
+
+Necesitaremos ahora hacer un "unpivot" a los datos para poder trabajarlos
+
+```{r}
+pr_ZAF_pivot <- pr_ZAF %>% 
+  pivot_longer(
+    cols = !anio, 
+    names_to = "mes", 
+    values_to = "pr"
+  )
+
+head(pr_ZAF_pivot)
+```
+
+Ahora convertimos los nombres de los meses a sus códigos numéricos para poder obtener un dato de fecha más tarde
+```{r}
+# reemplazamos valores según una condición
+# Replace Values Based on Condition
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Jan'] <- 1
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Feb'] <- 2
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Mar'] <- 3
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Apr'] <- 4
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'May'] <- 5
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Jun'] <- 6
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Jul'] <- 7
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Aug'] <- 8
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Sep'] <- 9
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Oct'] <- 10
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Nov'] <- 11
+pr_ZAF_pivot$mes[pr_ZAF_pivot$mes == 'Dec'] <- 12
+```
+
+Se creará una variable "fecha" que combine las variables de años y meses. Y se visualiza nuevamente el conjunto de datos resultante.
+```{r}
+pr_ZAF_pivot$Fecha <- as.Date(paste(pr_ZAF_pivot$anio, pr_ZAF_pivot$mes, 01), "%Y %m %d")
+head(pr_ZAF_pivot)
+```
+
+
+Se hará ahora un recorrido y análisis de los datos resultantes tras el trabajo llevado a cabo de transformación de los mismos
+
+#### Visualización datos
+
+```{r}
+# Plot
+pr_ZAF_pivot %>%
+  
+  ggplot( aes(x=Fecha, y=pr)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución precipitaciones anuales")
+```
+
+
+```{r}
+pr_ZAF_pivot <- pr_ZAF_pivot %>% arrange(Fecha)
+head(pr_ZAF_pivot)
+# Agregar una nueva columna de secuencia
+pr_ZAF_pivot$secuencia <- seq(1, nrow(pr_ZAF_pivot))
+
+# Imprimir el dataframe resultante
+print(pr_ZAF_pivot)
+```
+
+Se hace un estudio de regresión lineal para entender si la variación de los valores tiene una tendencia con el paso del tiempo 
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ pr, data = pr_ZAF_pivot)
+summary(model)
+```
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF_pivot, aes(x = secuencia, y = pr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación (pr) y la el paso del tiempo (secuencia)")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+#### Conclusiones tras observación
+
+En Sudáfrica se observa que no hay variación apreciable en la cantidad de lluvia a lo largo de los años.
+
+
+### Estudio meses - Sudáfrica
+#### Enero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Febrero
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Jan)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Marzo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Mar)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Abril
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Apr)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Mayo
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = May)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Junio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Jun)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Julio
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Jul)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Agosto
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Aug)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Septiembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Sep)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Octubre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Oct)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Noviembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Nov)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Diciembre
+
+```{r}
+# Se dibuja el gráfico
+ggplot(pr_ZAF, aes(x = anio, y = Dec)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre la precipitación y la el paso del tiempo")+
+  #geom_point() +
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+
+```
+
+
+#### Conclusiones datos - Sudáfrica
+Finalmente, se detecta que en algunos meses el comportamiento está cambiando ligeramente.
+
+
+
+
+## Datos de Población
+### Carga y transformaciones
+A continuación, se trabajarán los datos disponibles sobre la población existente en cada país del mundo, desde el año 1960 hasta el 2022.
+
+
+```{r warning=FALSE}
+# ruta  deel archivo
+# se almacenan los datos en dataframe
+poblacion_mundial <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/evolucion_poblacion.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(poblacion_mundial)
+
+# se previsualizan las últimas líneas del dataframe
+tail(poblacion_mundial)
+```
+
+#### Missing Values
+Se detecta si hay valores vacíos en el dataframe  y los trataremos.
+```{r}
+sum(is.na(poblacion_mundial))
+```
+Efectivamente, existen datos vacíos. Se localiza entonces en qué variables tenemos esos datos vacíos.
+
+```{r}
+colSums(is.na(poblacion_mundial))
+```
+
+
+
+```{r}
+registros_na <- poblacion_mundial[is.na(poblacion_mundial$'1960'), ]
+print(registros_na)
+```
+se decide eliminar estos 2 registros, uno por no aportar información, y otro, por aportar datos solo a partir de 1990. Se evita así que este último aspecto tergiverse los juicios finales que se concluyan.
+
+```{r}
+poblacion_mundial <- poblacion_mundial %>% filter(`Country Name` != 'No clasificado')
+poblacion_mundial <- poblacion_mundial %>% filter(`Country Name` != 'Ribera Occidental y Gaza')
+```
+
+Se comprueba que ya no existe missing data 
+```{r}
+registros_na <- poblacion_mundial[is.na(poblacion_mundial$'1960'), ]
+print(registros_na)
+```
+
+#### Análisis datos tratados y visualización
+
+Necesitaremos ahora transformar los datos según nos interese para ir obteniendo conclusiones
+
+```{r}
+poblacion_mundial <- poblacion_mundial[, -2]
+
+poblacion_mundial_pivot <- poblacion_mundial %>% 
+  pivot_longer(
+    cols = !`Country Name`, 
+    names_to = "anio", 
+    values_to = "poblacion"
+  )
+
+head(poblacion_mundial_pivot)
+```
+
+
+
+
+```{r}
+# se elige solo los registros correspondientes a los valores Mundo
+poblacion_mundial_sum <- poblacion_mundial_pivot %>% filter(`Country Name` == 'Mundo')
+
+head(poblacion_mundial_sum)
+```
+```{r}
+
+# Agregar una nueva columna de secuencia
+poblacion_mundial_sum$secuencia <- seq(1, nrow(poblacion_mundial_sum))
+
+# se almacenan estos datos para luego calcular el ritmo del crecimiento d ela población
+setwd("~/SBRG/MU/TF/Data Sources/TF_SBRG/exports/")
+# Nombre del archivo exportado: poblacion_mundial_sum.csv
+ write.csv(poblacion_mundial_sum, "poblacion_mundial_sum.csv", row.names = TRUE)
+head(poblacion_mundial_sum)
+```
+
+
+Se visualiza la evolución de los datos de población
+```{r}
+# Plot
+poblacion_mundial_sum %>%
+  
+  ggplot( aes(x=secuencia, y=poblacion)) +
+    geom_line(aes(group = 1), color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución población") #+
+    #theme(
+      #plot.margin = margin(0.5, 10, 0.5, 0.5, "cm"),
+      #axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8),
+      #axis.title.x = element_text(size = 10)  # Ajusta el tamaño del título del eje x
+    #)
+```
+
+
+Se considera que puede ajustarse a un modelo lineal por el aspecto visual
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ poblacion, data = poblacion_mundial_sum)
+summary(model)
+```
+Efecitamente se observa un buen ajunte. Por lo tanto, se representa el mismo.
+```{r}
+# Creamos el gráfico de la regresión
+
+ggplot(poblacion_mundial_sum, aes(x = secuencia , y = poblacion)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre el paso de los años y la población")+
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+```{r}
+# se lee el crecimiento porcentual de los valores de población
+poblacion_mundial_sum_perc <- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/poblacion_mundial_sum_perc.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+head(poblacion_mundial_sum_perc)
+```
+
+Se visualiza el ritmo de crecimiento
+```{r}
+# Plot
+poblacion_mundial_sum_perc %>%
+  
+  ggplot( aes(x=anio, y=crecimiento)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución crecimiento población")
+```
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ crecimiento, data = poblacion_mundial_sum_perc)
+summary(model)
+```
+
+Aunque no se observe un ajuste exacto, dará una idea sobre el patrón de evolución del ritmo de crecimiento de la población.
+```{r}
+# Creamos el gráfico de la regresión
+
+ggplot(poblacion_mundial_sum_perc, aes(x = secuencia , y = crecimiento)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre el paso de los años y la población mundial")+
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+#### Conclusiones
+- Se evidencia que hay un crecimiento de la población. Tendemos a aumentar en valores de producción a lo largo de todos los años desde el 1960.
+- Sin embargo, también se observa una disminución en el ritmo de crecimiento, sobre todo en los últimos años.
+
+## Datos de Población y Temperatura
+
+Ahora se analizan los mismos años de los que tenemos datos de población para los datos de temperatura
+
+#### Análisis datos tratados y visualización
+```{r}
+# se almacenan solo los datos de interés
+# se eligen los registros de interés
+Temp_Global_Averages_1960 <- Temp_Global_Averages[-c(1:1320), ]
+head(Temp_Global_Averages_1960)
+# se eligen los campos de interés
+Temp_Global_Averages_1960 <- Temp_Global_Averages_1960[, !(names(Temp_Global_Averages_1960) %in% c("Mes", "Anom_Mensual", "Fecha", "secuencia"))]
+
+# extraemos los máximos de las anomalías anuales para cada año 
+# se realiza el cálculo agregado de cada registro
+Temp_Global_Averages_1960_max <- aggregate(. ~ Anio, data = Temp_Global_Averages_1960, function(x) max(x))
+
+# Agregar una nueva columna de secuencia
+Temp_Global_Averages_1960_max$secuencia <- seq(1, nrow(Temp_Global_Averages_1960_max))
+head(Temp_Global_Averages_1960_max)
+
+```
+
+Antes ya se observaba cierta tendencia lineal en el patrón del comporatmiento de la temperatura para los últimos años. Por ello, se estudiará la regresión linea que mejor se ajusta a este modelo.
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(Anio ~ Anom_Anual, data = Temp_Global_Averages_1960_max)
+summary(model)
+```
+
+```{r}
+# Creamos el gráfico de la regresión
+
+ggplot(Temp_Global_Averages_1960_max, aes(x = Anio , y = Anom_Anual)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre el paso de los años y la temperatura")+
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+Se mergean los datos de temperatura y población para poder compararlos
+```{r}
+datos_temp_pobl <- merge(poblacion_mundial_sum, Temp_Global_Averages_1960_max, by = "secuencia")
+head(datos_temp_pobl)
+```
+
+
+Se limpia el dataset para realizar futuros cálculos
+```{r}
+datos_temp_pobl_limpios <- datos_temp_pobl[, !(names(datos_temp_pobl) %in% c("Country Name", "anio", "Anio", "secuencia"))]
+head(datos_temp_pobl_limpios)
+``` 
+
+
+
+```{r}
+# Calcular la matriz de correlación
+matriz_correlacion <- cor(datos_temp_pobl_limpios)
+
+# Imprimir la matriz de correlación
+print(matriz_correlacion)
+
+```
+Se observa que hay fuerte dependencia ya que los coeficientes son bastante cercanos a 1, tal y como se aprecia en los cálculos que arroja la matriz.
+
+Visualmente se estudia la relación entre las variables deseadas
+```{r}
+M <- cor(datos_temp_pobl_limpios)  #permite ejecutar una matriz de correlación
+corrplot(M, method = "ellipse")
+```
+
+También visualmente se denota una fuerte relación entre el comportamiento de las variables estudiadas.
+
+
+## Datos de emisiones Metano (CH4)
+### Carga y transformaciones
+A continuación, se trabajarán los datos disponibles sobre las emisiones de metano  (kt de equivalente de CO2) en el mundo, desde el año 1990 hasta el 2020.
+
+```{r warning=FALSE}
+# ruta  deel archivo
+# se almacenan los datos en dataframe
+emisiones_metano<- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/Emisiones de metano (kt de equivalente de CO2).xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(emisiones_metano)
+
+# se previsualizan las últimas líneas del dataframe
+tail(emisiones_metano)
+```
+
+
+De momento, serán de interés los datos correspondientes al mundo, y no a ningún país en concreto.
+```{r}
+emisiones_metano_mundial <- emisiones_metano %>% filter(`Country Name` == 'Mundo')
+head(emisiones_metano_mundial)
+```
+
+Se necesita ahora hacer un “unpivot” a los datos para poder trabajarlos
+
+```{r}
+# se eligen solo los campos que interesan
+emisiones_metano_mundial <- emisiones_metano_mundial[, !(names(emisiones_metano_mundial) %in% c("Country Code", "Indicator Name", "Indicator Code"))]
+head(emisiones_metano_mundial)
+
+# se hace el unpivot de los datos
+emisiones_metano_mundial_unpivot <- emisiones_metano_mundial %>% 
+  pivot_longer(
+    cols = !`Country Name`, 
+    names_to = "anio", 
+    values_to = "emisiones"
+  )
+
+head(emisiones_metano_mundial_unpivot)
+```
+```{r}
+# Agregar una nueva columna de secuencia
+emisiones_metano_mundial_unpivot$secuencia <- seq(1, nrow(emisiones_metano_mundial_unpivot))
+head(emisiones_metano_mundial_unpivot)
+```
+
+#### Análisis datos tratados y visualización
+Se visualiza la evolución de los datos de emisión a nivel mundial
+```{r}
+emisiones_metano_mundial_unpivot %>%
+  ggplot( aes(x=anio, y=emisiones)) +
+    geom_line(aes(group = 1), color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución emsiones metano")+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+Parece que puede ajustarse a un modelo de regresión lineal.
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ emisiones, data = emisiones_metano_mundial_unpivot)
+summary(model)
+```
+
+
+Efectivamente se observa en los valores del modelo que existe un ajuste aceptable.
+```{r}
+# Creamos el gráfico de la regresión
+
+ggplot(emisiones_metano_mundial_unpivot, aes(x = secuencia , y = emisiones)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre el paso de los años y la emisión de metano")+
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+
+
+## Datos de emisiones Óxido Nitroso (N2O)
+### Carga y transformaciones
+A continuación, se trabajarán los datos disponibles sobre las emisiones de óxido nitroso  (kt de equivalente de CO2) en el mundo, desde el año 1990 hasta el 2020.
+
+```{r warning=FALSE}
+# ruta  deel archivo
+# se almacenan los datos en dataframe
+emisiones_n2o<- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/oxido_nitroso_emisiones_ thousand metric tons of CO2 equivalent.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(emisiones_n2o)
+
+# se previsualizan las últimas líneas del dataframe
+tail(emisiones_n2o)
+```
+
+
+De momento, serán de interés los datos correspondientes al mundo, y no a ningún país en concreto.
+```{r}
+emisiones_n2o_mundial <- emisiones_n2o %>% filter(`Country Name` == 'World')
+head(emisiones_n2o_mundial)
+```
+
+Se necesita ahora hacer un “unpivot” a los datos para poder trabajarlos
+
+```{r}
+# se eligen solo los campos que interesan
+emisiones_n2o_mundial <- emisiones_n2o_mundial[, !(names(emisiones_n2o_mundial) %in% c("Country Code"))]
+head(emisiones_n2o_mundial)
+
+# se hace el unpivot de los datos
+emisiones_n2o_mundial_unpivot <- emisiones_n2o_mundial %>% 
+  pivot_longer(
+    cols = !`Country Name`, 
+    names_to = "anio", 
+    values_to = "emisiones n2o"
+  )
+
+head(emisiones_n2o_mundial_unpivot)
+```
+```{r}
+# Agregar una nueva columna de secuencia
+emisiones_n2o_mundial_unpivot$secuencia <- seq(1, nrow(emisiones_n2o_mundial_unpivot))
+head(emisiones_n2o_mundial_unpivot)
+```
+
+#### Missing values
+Se detecta si hay valores vacíos en el dataframe  y los trataremos.
+```{r}
+sum(is.na(emisiones_n2o_mundial_unpivot))
+```
+
+Efectivamente, existen datos vacíos. Se localiza entonces en qué variables tenemos esos datos vacíos.
+
+```{r}
+colSums(is.na(emisiones_n2o_mundial_unpivot))
+```
+
+```{r}
+
+# Seleccionar todos los registros que contienen valores NA en cualquier columna
+emisiones_n2o_mundial_unpivot_filtrado <- emisiones_n2o_mundial_unpivot[apply(is.na(emisiones_n2o_mundial_unpivot), 1, any), ]
+
+# Imprimir registros con valores NA
+print(emisiones_n2o_mundial_unpivot_filtrado)
+
+```
+
+Como se ha podido comprobar, se trata de filas vacías al completo. Se eliminan entonces para proseguir con el análisis de los datos.
+
+```{r}
+# se localizan los datos na y se eliminan del dataframe
+emisiones_n2o_mundial_unpivot_trat <- na.omit(emisiones_n2o_mundial_unpivot)
+head(emisiones_n2o_mundial_unpivot_trat)
+
+```
+
+Se detecta si hay valores vacíos neuvamente en el dataframe.
+```{r}
+sum(is.na(emisiones_n2o_mundial_unpivot_trat))
+```
+
+```{r}
+colSums(is.na(emisiones_n2o_mundial_unpivot_trat))
+```
+
+#### Análisis datos tratados y visualización
+Se visualiza la evolución de los datos de emisión a nivel mundial
+```{r}
+emisiones_n2o_mundial_unpivot_trat %>%
+  ggplot( aes(x=anio, y=`emisiones n2o`)) +
+    geom_line(aes(group = 1), color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución emsiones óxido nitroso")+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+Parece que puede ajustarse a un modelo de regresión lineal.
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ `emisiones n2o`, data = emisiones_n2o_mundial_unpivot_trat)
+summary(model)
+```
+
+
+Efectivamente se observa en los valores del modelo que existe un ajuste aceptable.
+```{r}
+# Creamos el gráfico de la regresión
+ggplot(emisiones_n2o_mundial_unpivot_trat, aes(x = secuencia , y = `emisiones n2o`)) +
+  geom_line(color = "lightblue", lwd = 1) +
+  geom_abline(intercept = model$coefficients[1], slope = model$coefficients[2]) +
+  ggtitle("Relación entre el paso de los años y la población mundial")+
+  geom_smooth(method='lm', formula=y~x, se=FALSE, col='dodgerblue1') +
+  theme_light()
+```
+
+
+
+
+## Datos de tierra cultivada
+### Carga y transformaciones
+A continuación, se trabajarán los datos disponibles sobre la extensión de tierra cultivada para agricultura en el mundo, desde el año 1961 hasta el 2021.
+
+```{r warning=FALSE}
+# ruta  deel archivo
+# se almacenan los datos en dataframe
+tierra_cult<- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/API_AG_LND_AGRI_K2_DS2_en.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(tierra_cult)
+
+# se previsualizan las últimas líneas del dataframe
+tail(tierra_cult)
+```
+
+
+De momento, serán de interés los datos correspondientes al mundo, y no a ningún país en concreto.
+```{r}
+tierra_cult_mundial <- tierra_cult %>% filter(`Country Name` == 'World')
+head(tierra_cult_mundial)
+```
+
+Se necesita ahora hacer un “unpivot” a los datos para poder trabajarlos
+
+```{r}
+# se eligen solo los campos que interesan
+tierra_cult_mundial <- tierra_cult_mundial[, !(names(tierra_cult_mundial) %in% c("Country Code", "Indicator Name", "Indicator Code"))]
+head(tierra_cult_mundial)
+
+# se hace el unpivot de los datos
+tierra_cult_mundial_unpivot <- tierra_cult_mundial %>% 
+  pivot_longer(
+    cols = !`Country Name`, 
+    names_to = "anio", 
+    values_to = "extension_tierra"
+  )
+
+head(tierra_cult_mundial_unpivot)
+```
+
+```{r warning=FALSE}
+setwd("~/SBRG/MU/TF/Data Sources/TF_SBRG/exports/")
+# Nombre del archivo exportado: tierra_cult_mundial_unpivot.csv
+ write.csv(tierra_cult_mundial_unpivot, "tierra_cult_mundial_unpivot.csv", row.names = TRUE)
+```
+
+
+```{r}
+# Agregar una nueva columna de secuencia
+tierra_cult_mundial_unpivot$secuencia <- seq(1, nrow(tierra_cult_mundial_unpivot))
+head(tierra_cult_mundial_unpivot)
+tail(tierra_cult_mundial_unpivot)
+```
+
+#### Missing values
+Se detecta si hay valores vacíos en el dataframe  y los trataremos.
+```{r}
+sum(is.na(tierra_cult_mundial_unpivot))
+```
+
+No existen datos vacíos.
+
+```{r}
+# Convertir la columna  a tipo numérico
+tierra_cult_mundial_unpivot$extension_tierra <- as.numeric(tierra_cult_mundial_unpivot$extension_tierra)
+tierra_cult_mundial_unpivot$anio <- as.numeric(tierra_cult_mundial_unpivot$anio)
+head(tierra_cult_mundial_unpivot)
+```
+
+#### Análisis datos tratados y visualización
+
+Se visualiza la evolución de los datos 
+```{r}
+tierra_cult_mundial_unpivot %>%
+  ggplot( aes(x=anio, y=`extension_tierra`)) +
+    geom_line(aes(group = 1), color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución extensión tierra de agricultura")+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+### Conclusiones
+Parece que puede ajustarse a un modelo de regresión lineal desde el año 1961 hasta el 2000, creciente. Sin embargo, a partir del año 2001 el comportamiento cambia, produciéndose una disminución, que además, no atiende a ningún comportamiento lineal, sino que va fluctuando con el tiempo.
+
+
+
+## Datos uso fertilizantes
+### Carga y transformaciones
+A continuación, se trabajarán los datos disponibles sobre el uso de fertilizantes desde el año 1961 hasta el 2021.
+
+```{r warning=FALSE}
+# ruta  deel archivo
+# se almacenan los datos en dataframe
+fertilizantes<- read_excel("~/SBRG/MU/TF/Data Sources/TF_SBRG/IFA_Fertilizer_Consumption.xlsx",col_names = TRUE, skip = 0, .name_repair = "unique")
+```
+
+```{r}
+# se previsualizan las primeras líneas del dataframe
+head(fertilizantes)
+```
+
+
+```{r}
+# Agregar una nueva columna de secuencia
+fertilizantes$secuencia <- seq(1, nrow(fertilizantes))
+head(fertilizantes)
+```
+
+#### Missing values
+Se detecta si hay valores vacíos en el dataframe  y los trataremos.
+```{r}
+sum(is.na(fertilizantes))
+```
+
+No existen datos vacíos.
+
+```{r}
+# Convertir la columna  a tipo numérico
+fertilizantes$N <- as.numeric(fertilizantes$N)
+fertilizantes$P2O5 <- as.numeric(fertilizantes$P2O5)
+fertilizantes$K2O <- as.numeric(fertilizantes$K2O)
+fertilizantes$Year <- as.numeric(fertilizantes$Year)
+# se renombra la columna
+fertilizantes <- fertilizantes %>%
+  rename(anio = Year)
+head(fertilizantes)
+```
+
+#### Análisis de datos tratados y visualización
+##### Fertilizantes nitrogenados (N)
+Se visualiza la evolución de los datos 
+```{r}
+# Creamos el gráfico de la regresión
+fertilizantes %>%
+  ggplot( aes(x=anio, y=`N`)) +
+    geom_line(aes(group = 1), color = "grey", lwd = 1) +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución uso N")+
+    geom_smooth(method='lm', formula=y~x, se=FALSE, col='lightblue') +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+Parece que puede ajustarse a un modelo de regresión lineal.
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ N, data = fertilizantes)
+summary(model)
+```
+Efectivamente se observa en los valores del modelo que existe un ajuste muy bueno ya que obtenemos un coeficiente R^2=0.95, bastante cercano a 1.
+
+##### Fertilizantes fosfatados (P2O5)
+
+```{r}
+fertilizantes %>%
+  ggplot( aes(x=anio, y=`P2O5`)) +
+    geom_line(aes(group = 1), color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución uso P2O5")+
+    geom_smooth(method='lm', formula=y~x, se=FALSE, col='lightblue') +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+Parece que puede ajustarse a un modelo de regresión lineal.
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ P2O5, data = fertilizantes)
+summary(model)
+```
+Efectivamente se observa en los valores del modelo que existe un ajuste aceptable ya que obtenemos un coeficiente R^2=0.85.
+
+
+##### Fertilizantes potásicos (K2O)
+
+```{r}
+fertilizantes %>%
+  ggplot( aes(x=anio, y=`K2O`)) +
+    geom_line(aes(group = 1), color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolución uso K2O")+
+    geom_smooth(method='lm', formula=y~x, se=FALSE, col='lightblue') +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+Parece que puede ajustarse a un modelo de regresión lineal.
+
+```{r}
+# Ajustamos el modelo de regresión lineal
+model <- lm(secuencia ~ K2O, data = fertilizantes)
+summary(model)
+```
+Aunque no encontramos una precisión muy buena, puesto el coeficiente R^2=0.76 se aleja algo del valor 1, se considera que se puede explicar el comportamiento mediante este modelo, sobre todo por el comportamiento de los últimos años.
+
+
+### Conclusiones
+Tal y como se observa, cada vez es mayor el uso de fertilizantes, siendo los nitrogenados los más usados y también los que tienen una tendencia de crecimiento mayor.
+
+
+
+
+# Relaciones entre los datos estudiados
+
+Si se quiere analizar los datos de temperatura y población en conjunto con los de emisiones, entonces se debe ajustar el conjunto de datos para que aparezcan los mismos valores en el campo de año, y así, poder relacionarlos.
+
+Se tomarán solo los datos a partir del 1990, hasta el 2020 para homogeneizar e integrar el estudio de datos a realizar
+
+```{r}
+# se eligen los registros de interés
+datos_temp_pobl_1990 <- datos_temp_pobl[(31:61), ]
+# se eligen los campos de interés
+datos_temp_pobl_1990 <- datos_temp_pobl_1990[, !(names(datos_temp_pobl_1990) %in% c("Country Name", "Anio"))]
+head(datos_temp_pobl_1990)
+```
+
+
+
+```{r}
+# se eligen los campos de interés
+emisiones_metano_mundial_1990 <- emisiones_metano_mundial_unpivot[, !(names(emisiones_metano_mundial_unpivot) %in% c("Country Name", "secuencia"))]
+# se renombra la columna
+emisiones_metano_mundial_1990 <- emisiones_metano_mundial_1990 %>%
+  rename(emisiones_metano = emisiones)
+# se muestra el dataframe elegido
+head(emisiones_metano_mundial_1990)
+```
+
+
+
+```{r}
+# se eligen los campos de interés
+emisiones_n2o_mundial_1990 <- emisiones_n2o_mundial_unpivot_trat[, !(names(emisiones_n2o_mundial_unpivot_trat) %in% c("Country Name", "secuencia"))]
+# se muestra el dataframe elegido
+head(emisiones_n2o_mundial_1990)
+```
+
+
+```{r}
+# se eligen los registros de interés
+fertilizantes_1990 <- fertilizantes[(30:60), ]
+# se eligen los campos de interés
+fertilizantes_1990 <- fertilizantes_1990[, !(names(fertilizantes_1990) %in% c("Region", "secuencia"))]
+head(fertilizantes_1990)
+```
+
+
+Se mergean los datos de temperatura, población, emsiones y uso de fertilizantes para poder compararlos
+```{r}
+datos_temp_pobl_emis_fert <- merge(datos_temp_pobl_1990, emisiones_metano_mundial_1990, by = "anio")
+datos_temp_pobl_emis_fert <- merge(datos_temp_pobl_emis_fert, emisiones_n2o_mundial_1990, by = "anio")
+datos_temp_pobl_emis_fert <- merge(datos_temp_pobl_emis_fert, fertilizantes_1990, by = "anio")
+head (datos_temp_pobl_emis_fert)
+tail(datos_temp_pobl_emis_fert)
+```
+
+```{r}
+# Convertir la columna caracter a numérica
+datos_temp_pobl_emis_fert$anio <- as.numeric(datos_temp_pobl_emis_fert$anio)
+
+# se renombra la columna
+datos_temp_pobl_emis_fert <- datos_temp_pobl_emis_fert %>%
+  rename(emisiones_n2o = `emisiones n2o`)
+
+# Calcular la matriz de correlación
+matriz_correlacion <- cor(datos_temp_pobl_emis_fert)
+
+# Imprimir la matriz de correlación
+print(matriz_correlacion)
+
+```
+
+Se observa que hay fuerte dependencia ya que los coeficientes son bastante cercanos a 1.
+
+Visualmente se estudia la relación entre las variables deseadas
+```{r}
+M <- cor(datos_temp_pobl_emis_fert)  #permite ejecutar una matriz de correlación
+corrplot(M, method = "ellipse")
+```
+
+También visualmente se denota una fuerte relación entre el comportamiento de las variables estudiadas en cuanto a su evolución de datos.
+Se denota que todas se relacionan positivamente, con un alto grado de correlación, aparentenmente con valores entre el 0.8 y el 1, lo cual evidencia una buena o excelente correlación.
+
+
+
+# Predicción de valores - Modelo lineal
+
+Según las observaciones realizadas sobre los datos, se decide aplicar entonces un modelo lineal para realizar predicciones en cada variable
+
+
+## Temperatura
+
+```{r}
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal
+lineal_temp <- lm(Anom_Anual ~ anio, data=datos_temp_pobl_emis_fert)
+
+# Visualizamos el resumen
+summary(lineal_temp)
+
+```
+```{r}
+# Se analiza la bondad de ajuste con R^2
+summary(lineal_temp)$r.squared
+```
+- Se obtiene una bondad de ajuste no muy elevada, por lo que la precisión del modelo no será demasiado alta, si bien, sí puede considerarse buena.
+- Se observa un p valor mucho menor de 0.05 que nos hace pensar que hay significancia estadística.
+- Se concluye entonces que se puede asemejar la evolución de la temperatura al comportamiento descrito por este modelo. 
+
+```{r}
+nuevos_datos <- data.frame(anio = seq(2020, 2050))
+
+nuevas_predicciones <- predict(lineal_temp, newdata = nuevos_datos)
+print(nuevas_predicciones)
+```
+
+```{r}
+# Crear un nuevo DataFrame para almacenar las predicciones
+# almacenar los años de interés
+resultados_predicciones <- data.frame(anio = nuevos_datos$anio) 
+
+# Asignar las predicciones al nuevo DataFrame
+resultados_predicciones$predicciones_temperatura <- nuevas_predicciones
+
+resultados_predicciones_temp<- resultados_predicciones
+
+# Imprimir los resultados
+print(resultados_predicciones_temp)
+```
+
+
+## Población
+
+```{r}
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal 
+lineal_pob<- lm(poblacion ~ anio, data=datos_temp_pobl_emis_fert)
+
+# Visualizamos el resumen
+summary(lineal_pob)
+```
+
+- Se osbserva una bondad de ajuste bastante elevada, siendo casi igual a 1, por lo que la precisión del modelo será alta y se considera excelente su correlación.
+- Se observa un p valor mucho menor de 0.05 que nos hace pensar que hay significancia estadística.
+- Se concluye entonces que se puede asemejar la evolución de la población al comportamiento descrito por este modelo.
+
+
+```{r}
+nuevos_datos <- data.frame(anio = seq(2020, 2050))
+
+nuevas_predicciones <- predict(lineal_pob, newdata = nuevos_datos)
+print(nuevas_predicciones)
+```
+
+```{r}
+# Crear un nuevo DataFrame para almacenar las predicciones
+# almacenar los años de interés
+resultados_predicciones <- data.frame(anio = nuevos_datos$anio) 
+
+# Asignar las predicciones al nuevo DataFrame
+resultados_predicciones$predicciones_poblacion <- nuevas_predicciones
+
+resultados_predicciones_pob <- resultados_predicciones
+
+# Imprimir los resultados
+print(resultados_predicciones_pob)
+```
+
+
+## Emisiones Metano (CH4)
+
+```{r}
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal
+lineal_met<- lm(emisiones_metano ~ anio, data=datos_temp_pobl_emis_fert)
+
+# Visualizamos el resumen
+summary(lineal_met)
+```
+
+- Se osbserva una bondad de ajuste bastante elevada, muy cercana a 1, por lo que la precisión del modelo será alta y se trata de una correlación excelente.
+- Se obsreva un p valor mucho menor de 0.05 que nos hace pensar que hay significancia estadística.
+- Se concluye entonces que se puede asemejar la evolución de la emisión de metano al comportamiento descrito por este modelo.
+
+```{r}
+nuevos_datos <- data.frame(anio = seq(2020, 2050))
+
+nuevas_predicciones <- predict(lineal_met, newdata = nuevos_datos)
+print(nuevas_predicciones)
+```
+
+```{r}
+# Crear un nuevo DataFrame para almacenar las predicciones
+# almacenar los años de interés
+resultados_predicciones <- data.frame(anio = nuevos_datos$anio) 
+
+# Asignar las predicciones al nuevo DataFrame
+resultados_predicciones$predicciones_metano <- nuevas_predicciones
+
+resultados_predicciones_metano <-resultados_predicciones
+
+# Imprimir los resultados
+print(resultados_predicciones_metano)
+```
+
+
+
+## Emisiones Óxido Nitroso (N2O)
+
+```{r}
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal
+lineal_N2O<- lm(`emisiones_n2o` ~ anio, data=datos_temp_pobl_emis_fert)
+
+# Visualizamos el resumen
+summary(lineal_N2O)
+```
+
+- Se osbserva una bondad de ajuste bastante elevada, muy cercana a 1, por lo que la precisión del modelo será alta y se trata de una correlación excelente.
+- Se obsreva un p valor mucho menor de 0.05 que nos hace pensar que hay significancia estadística.
+- Se concluye entonces que se puede asemejar la evolución de la emisión de metano al comportamiento descrito por este modelo.
+
+```{r}
+nuevos_datos <- data.frame(anio = seq(2020, 2050))
+
+nuevas_predicciones <- predict(lineal_N2O, newdata = nuevos_datos)
+print(nuevas_predicciones)
+```
+
+```{r}
+# Crear un nuevo DataFrame para almacenar las predicciones
+# almacenar los años de interés
+resultados_predicciones <- data.frame(anio = nuevos_datos$anio) 
+
+# Asignar las predicciones al nuevo DataFrame
+resultados_predicciones$predicciones_N2O <- nuevas_predicciones
+
+resultados_predicciones_N2O <-resultados_predicciones
+
+# Imprimir los resultados
+print(resultados_predicciones_N2O)
+```
+
+
+
+## Uso Fertilizantes nitrogenados (N)
+
+```{r}
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal
+lineal_N<- lm(N ~ anio, data=datos_temp_pobl_emis_fert)
+
+# Visualizamos el resumen
+summary(lineal_N)
+```
+
+- Se osbserva una bondad de ajuste bastante elevada, muy cercana a 1, por lo que la precisión del modelo será alta y se trata de una correlación excelente.
+- Se obsreva un p valor mucho menor de 0.05 que nos hace pensar que hay significancia estadística.
+- Se concluye entonces que se puede asemejar la evolución de la emisión de metano al comportamiento descrito por este modelo.
+
+```{r}
+nuevos_datos <- data.frame(anio = seq(2020, 2050))
+
+nuevas_predicciones <- predict(lineal_N, newdata = nuevos_datos)
+print(nuevas_predicciones)
+```
+
+```{r}
+# Crear un nuevo DataFrame para almacenar las predicciones
+# almacenar los años de interés
+resultados_predicciones <- data.frame(anio = nuevos_datos$anio) 
+
+# Asignar las predicciones al nuevo DataFrame
+resultados_predicciones$predicciones_n <- nuevas_predicciones
+
+resultados_predicciones_n <-resultados_predicciones
+
+# Imprimir los resultados
+print(resultados_predicciones_n)
+```
+
+
+## Uso Fertilizantes potásicos (K2O)
+
+```{r}
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal
+lineal_K2O<- lm(`K2O` ~ anio, data=datos_temp_pobl_emis_fert)
+
+# Visualizamos el resumen
+summary(lineal_K2O)
+```
+
+- Se osbserva una bondad de ajuste bastante elevada, muy cercana a 1, por lo que la precisión del modelo será alta y se trata de una correlación excelente.
+- Se obsreva un p valor mucho menor de 0.05 que nos hace pensar que hay significancia estadística.
+- Se concluye entonces que se puede asemejar la evolución de la emisión de metano al comportamiento descrito por este modelo.
+
+```{r}
+nuevos_datos <- data.frame(anio = seq(2020, 2050))
+
+nuevas_predicciones <- predict(lineal_K2O, newdata = nuevos_datos)
+print(nuevas_predicciones)
+```
+
+```{r}
+# Crear un nuevo DataFrame para almacenar las predicciones
+# almacenar los años de interés
+resultados_predicciones <- data.frame(anio = nuevos_datos$anio) 
+
+# Asignar las predicciones al nuevo DataFrame
+resultados_predicciones$predicciones_K2O <- nuevas_predicciones
+
+resultados_predicciones_K2O <-resultados_predicciones
+
+# Imprimir los resultados
+print(resultados_predicciones_K2O)
+```
+
+## Uso Fertilizantes fosfatados (P2O5)
+
+```{r}
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal
+lineal_P2O5<- lm(`P2O5` ~ anio, data=datos_temp_pobl_emis_fert)
+
+# Visualizamos el resumen
+summary(lineal_P2O5)
+```
+
+- Se osbserva una bondad de ajuste bastante elevada, muy cercana a 1, por lo que la precisión del modelo será alta y se trata de una correlación excelente.
+- Se obsreva un p valor mucho menor de 0.05 que nos hace pensar que hay significancia estadística.
+- Se concluye entonces que se puede asemejar la evolución de la emisión de metano al comportamiento descrito por este modelo.
+
+```{r}
+nuevos_datos <- data.frame(anio = seq(2020, 2050))
+
+nuevas_predicciones <- predict(lineal_P2O5, newdata = nuevos_datos)
+print(nuevas_predicciones)
+```
+
+```{r}
+# Crear un nuevo DataFrame para almacenar las predicciones
+# almacenar los años de interés
+resultados_predicciones <- data.frame(anio = nuevos_datos$anio) 
+
+# Asignar las predicciones al nuevo DataFrame
+resultados_predicciones$predicciones_P2O5 <- nuevas_predicciones
+
+resultados_predicciones_P2O5 <-resultados_predicciones
+
+# Imprimir los resultados
+print(resultados_predicciones_P2O5)
+```
+
+
+
+
+## Predicciones modelo lineal (export datos estructurados)
+Se almacenan en un dataframe único todos los valores predecidos obtenidos, para posteriormente, unificar los datos con los reales y poder visualizar el estudio de resultados en PBI.
+
+```{r}
+datos_temp_pobl_emis_fert_pred <- merge(resultados_predicciones_pob, resultados_predicciones_temp, by = "anio")
+datos_temp_pobl_emis_fert_pred <- merge(datos_temp_pobl_emis_fert_pred, resultados_predicciones_metano, by = "anio")
+datos_temp_pobl_emis_fert_pred <- merge(datos_temp_pobl_emis_fert_pred, resultados_predicciones_n, by = "anio")
+datos_temp_pobl_emis_fert_pred <- merge(datos_temp_pobl_emis_fert_pred, resultados_predicciones_K2O, by = "anio")
+datos_temp_pobl_emis_fert_pred <- merge(datos_temp_pobl_emis_fert_pred, resultados_predicciones_P2O5, by = "anio")
+datos_temp_pobl_emis_fert_pred <- merge(datos_temp_pobl_emis_fert_pred, resultados_predicciones_N2O, by = "anio")
+
+```
+
+
+
+## Temperatura y resto de variables
+
+Se estudiará la relación entre la temperatura y el resto de variables
+
+
+```{r}
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal en <<Anom_Anual>> contra el paso de los años y la 
+lineal_temp_otros<- lm(Anom_Anual ~ anio + poblacion + emisiones_n2o + emisiones_metano + N + P2O5 + K2O, data=datos_temp_pobl_emis_fert)
+
+# Visualizamos el resumen
+summary(lineal_temp_otros)
+```
+
+- Se obtiene una bondad de ajuste no muy elevada, por lo que la precisión del modelo no será demasiado alta si tenemos en cuenta todas las variables posibles.
+- Se observa que la única variable que puede tener significancia en la predicción será <<emisiones_metano>>.
+- Por lo tanto, se estudiarán la relación en la predicción de los valores de temperatura en función de la emisión de metano para los próximos años
+
+Se estudia ahora el Factor de Inflación de la Varianza, que indicarán la presencia de multicolinealidad en el modelo, ya que anteriormente se ha estudiado que las variables están altamente correlacionadas.
+
+```{r warning=FALSE}
+vif(lineal_temp_otros)
+```
+Se observan valores muy elevados, lo cual hará que descartemos el uso de todas las variables para la explicación del modelo. Los valores de VIF elevados denotan que habrá una distorsión importante en la varianza, lo cual afectaría a la precisión y estabilidad del modelo estudiado.
+Aún así, veamos qué pasaría si usáramos solo el metano y los años, ya que se ha determinado del estudio que pueden ser variables significativas.
+
+
+```{r}
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal 
+lineal_temp_otros<- lm(Anom_Anual ~ anio + emisiones_metano , data=datos_temp_pobl_emis_fert)
+
+# Visualizamos el resumen
+summary(lineal_temp_otros)
+```
+
+- Se obtiene un coeficiente de determinación ajustado no muy elevado, por lo que la precisión del modelo no será demasiado alta si tenemos en cuenta la variación de emisiones de metano.
+- El valor p para la variable emisiones_metano es demasiado elevado, por lo que se concluye que el metano tampoco será una variable significativa en la estimación de los valores predecidos de temperatura.
+
+
+
+# Predicción Temperatura en función de los años (para todos los años disponibles)
+## Modelo lineal
+Aunque se ha seleccionado una parte del conjunto de datos disponibles de temperatura para poder establecer relaciones entre las variables, también se puede hacer un estudio de todos los valores de temperatura desde el año 1950, con el conjunto de datos que engloba los valores anuales máximos registrados.
+
+
+```{r}
+# se eligen los campos de interés
+Temp_Global_Averages_1850 <- Temp_Global_Averages[, !(names(Temp_Global_Averages) %in% c("Mes", "Anom_Mensual", "Fecha", "secuencia"))]
+
+# extraemos los máximos de las anomalías anuales para cada año 
+# se realiza el cálculo agregado de cada registro
+Temp_Global_Averages_1850_max <- aggregate(. ~ Anio, data = Temp_Global_Averages_1850, function(x) max(x))
+```
+
+
+La variable respuesta será Anom_Anual y la variable predictora será Anio.
+```{r}
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal
+lineal_temp <- lm(Anom_Anual ~ Anio, data=Temp_Global_Averages_1850_max)
+
+# Visualizamos el resumen
+summary(lineal_temp)
+
+```
+- Se obtiene una precisión algo buena, con un coeficiente de determinación R^2= 0.76 que indica un buen ajuste.
+- El p valor es cercano a 0, por lo que sugiere que la variable predictora es significativa.
+- Se procede entonces a aplicar el modelo para predecir los valores
+
+
+```{r}
+# Predecir los valores para los años existentes en el conjunto de datos
+predicciones <- predict(lineal_temp, newdata = Temp_Global_Averages_1850_max)
+
+# Crear un nuevo dataframe con los valores reales y predichos
+resultados_prediccion <- data.frame(Anio = Temp_Global_Averages_1850_max$Anio,
+                                    Real = Temp_Global_Averages_1850_max$Anom_Anual,
+                                    Prediccion = predicciones)
+
+# Visualizar resultados en un gráfico
+library(ggplot2)
+
+ggplot(resultados_prediccion, aes(x = Anio)) +
+  geom_line(aes(y = Real, color = "Real"), linetype = "solid", size = 1, alpha = 0.7) +
+  geom_line(aes(y = Prediccion, color = "Predicho"), linetype = "dashed", size = 1) +
+  labs(
+    title = "Valores Reales vs. Predichos",
+    x = "Año",
+    y = "Anomalía de Temperatura Anual"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Real" = "blue", "Predicho" = "red")) +
+  theme(legend.position = "top")
+
+```
+
+
+
+
+
+```{r}
+nuevos_datos <- data.frame(Anio = seq(2020, 2050))
+
+nuevas_predicciones <- predict(lineal_temp, newdata = nuevos_datos)
+print(nuevas_predicciones)
+```
+
+```{r}
+# Crear un nuevo DataFrame para almacenar las predicciones
+# almacenar los años de interés
+resultados_predicciones <- data.frame(anio = nuevos_datos$Anio) 
+
+# Asignar las predicciones al nuevo DataFrame
+resultados_predicciones$predicciones_temp_glob_lin <- nuevas_predicciones
+
+predicciones_temp_glob_lin<- resultados_predicciones
+
+# Imprimir los resultados
+print(predicciones_temp_glob_lin)
+```
+
+Se observa que este ajuste no representa la pendiente tan pronunciada de los últimos años. En cambio, sí se observaba mejor al realizar la predicción solo toamndo en cuenta los últimos años que responden ante un comportamiento más homógeneo de crecimiento.
+
+```{r warning=FALSE}
+# Predecir los valores para los años existentes en el conjunto de datos
+predicciones <- predict(lineal_temp, newdata = Temp_Global_Averages_1850_max)
+
+# Crear un nuevo dataframe con los valores reales y predichos
+resultados_prediccion <- data.frame(Anio = Temp_Global_Averages_1850_max$Anio,
+                                    Real = Temp_Global_Averages_1850_max$Anom_Anual,
+                                    Prediccion = predicciones)
+
+# Agregar las nuevas predicciones al dataframe
+resultados_prediccion <- rbind(resultados_prediccion,
+                               data.frame(Anio = nuevos_datos$Anio,
+                                          Real = rep(NA, length(nuevos_datos$Anio)),
+                                          Prediccion = nuevas_predicciones))
+
+# Visualizar resultados en un gráfico
+library(ggplot2)
+
+ggplot(resultados_prediccion, aes(x = Anio)) +
+  geom_line(aes(y = Real, color = "Real"), linetype = "solid", size = 1, alpha = 0.7) +
+  geom_line(aes(y = Prediccion, color = "Predicho"), linetype = "dashed", size = 1) +
+  labs(
+    title = "Valores Reales vs. Predichos",
+    x = "Año",
+    y = "Anomalía de Temperatura Anual"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Real" = "blue", "Predicho" = "red")) +
+  theme(legend.position = "top")
+
+```
+
+Se estudia ahora entonces solo los años correspondientes al patrón de comportamiento de los últimos años, desde 1925 hasta 2023.
+
+
+```{r}
+# Filtrar el conjunto de datos para incluir solo los registros desde 1925 hasta 2023
+datos_filtrados <- subset(Temp_Global_Averages_1850_max, Anio >= 1925 & Anio <= 2023)
+
+set.seed(123)  # Establecer semilla para reproducibilidad
+# Se aplica el modelo lineal
+lineal_temp <- lm(Anom_Anual ~ Anio, data=datos_filtrados)
+
+# Visualizamos el resumen
+summary(lineal_temp)
+```
+- Se deduce un buen ajuste, con un R^2 = 0.839.
+- El p valor es bastante bajo, lo cual indica que la variable predictora es significativa en nuestra predicción.
+
+```{r warning=FALSE}
+# Predecir los valores para los años existentes en el conjunto de datos filtrado
+predicciones_existentes <- predict(lineal_temp, newdata = datos_filtrados)
+
+# Crear un nuevo dataframe con los valores reales y predichos de los años existentes
+resultados_prediccion_existente <- data.frame(Anio = datos_filtrados$Anio,
+                                              Real = datos_filtrados$Anom_Anual,
+                                              Prediccion = predicciones_existentes)
+
+# Predecir los valores para los años adicionales (2024 hasta 2050)
+nuevos_datos <- data.frame(Anio = seq(2024, 2050))
+predicciones_nuevos <- predict(lineal_temp, newdata = nuevos_datos)
+
+pred_nuevos_df<- data.frame(Anio = nuevos_datos$Anio,
+                            Real = rep(NA, length(nuevos_datos$Anio)),
+                            Prediccion = predicciones_nuevos)
+
+# Combinar los resultados de los años existentes con los nuevos
+resultados_prediccion <- rbind(resultados_prediccion_existente,
+                               pred_nuevos_df)
+
+# Visualizar resultados en un gráfico
+library(ggplot2)
+
+ggplot(resultados_prediccion, aes(x = Anio)) +
+  geom_line(aes(y = Real, color = "Real"), linetype = "solid", size = 1, alpha = 0.7) +
+  geom_line(aes(y = Prediccion, color = "Predicho"), linetype = "dashed", size = 1) +
+  labs(
+    title = "Valores Reales vs. Predichos",
+    x = "Año",
+    y = "Anomalía de Temperatura Anual"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Real" = "blue", "Predicho" = "red")) +
+  theme(legend.position = "top")
+
+
+```
+
+
+Si se quieren observar con detalle los valores predecidos, se visualizan
+
+```{r}
+print(pred_nuevos_df)
+```
+
+Se almacenan los datos con los valores predecidos para visualizar en el informe de Power BI, en conjunto con el resto de datos que hay disponibles.
+
+```{r warning=FALSE}
+# Predecir los valores para los años existentes en el conjunto de datos filtrado
+predicciones_existentes <- predict(lineal_temp, newdata = Temp_Global_Averages_1850_max)
+
+# Crear un nuevo dataframe con los valores reales y predichos de los años existentes
+resultados_prediccion_existente_global <- data.frame(Anio = Temp_Global_Averages_1850_max$Anio,
+                                              Real = Temp_Global_Averages_1850_max$Anom_Anual,
+                                              Prediccion = predicciones_existentes)
+
+# Combinar los resultados de los años existentes con los nuevos
+resultados_prediccion_global <- rbind(resultados_prediccion_existente_global,
+                               pred_nuevos_df)
+
+setwd("~/SBRG/MU/TF/Data Sources/TF_SBRG/exports/")
+# Nombre del archivo exportado: Temp_Global_Averages_pred.csv
+ write.csv(resultados_prediccion_global, "Temp_Global_Averages_pred.csv", row.names = TRUE)
+ 
+head(resultados_prediccion_global)
+```
+
+Se unen estos datos a los datos que teníamos predecidos de las otras variables preparando los datos.
+
+```{r warning=FALSE}
+# Combinar los resultados de los años existentes con los nuevos
+datos_temp_pobl_emis_fert$tipo <- "real"
+datos_temp_pobl_emis_fert_pred$tipo <- "pred"
+datos_temp_pobl_emis_fert_real <- datos_temp_pobl_emis_fert[, !(names(datos_temp_pobl_emis_fert) %in% "secuencia")]
+
+nuevos_nombres <- c("anio", "poblacion", "Anom_Anual", "emisiones_metano", "N", "K2O", "P2O5", "emisiones_n2o", "tipo")
+colnames(datos_temp_pobl_emis_fert_pred) <- nuevos_nombres
+
+datos_real_pred <- rbind(datos_temp_pobl_emis_fert_real,
+                               datos_temp_pobl_emis_fert_pred)
+
+setwd("~/SBRG/MU/TF/Data Sources/TF_SBRG/exports/")
+# Nombre del archivo exportado: datos_real_pred.csv
+ write.csv(datos_real_pred, "datos_real_pred.csv", row.names = TRUE)
+
+```
+
+
+## Random forest
+
+
+```{r warning=FALSE}
+# Dividir los datos en conjuntos de entrenamiento y prueba
+# Establecer una semilla para reproducibilidad
+set.seed(123)  
+# se elige porcentaje para selección de datos aleatorios
+# 80% serán datos de entrenamiento, mientras que 20% serán test
+porcentaje_entrenamiento <- 0.8
+# se seleccionan los datos aleatoriamente para evitar sesgos en el modelo
+indices_entrenamiento <- sample(1:nrow(Temp_Global_Averages_1850_max), round(porcentaje_entrenamiento * nrow(Temp_Global_Averages_1850_max)))
+datos_entrenamiento <- Temp_Global_Averages_1850_max[indices_entrenamiento, ]
+datos_test <- Temp_Global_Averages_1850_max[-indices_entrenamiento, ]
+
+# Graficar
+grafico <- ggplot() +
+  # Datos de entrenamiento en azul
+  geom_line(data = datos_entrenamiento, aes(x = Anio, y = Anom_Anual), color = "blue") +
+  # Datos de prueba en rojo
+  geom_line(data = datos_test, aes(x = Anio, y = Anom_Anual), color = "red") +
+  
+  labs(title = "Comparación de Datos de Entrenamiento y Prueba",
+       x = "Año",
+       y = "Anomalías") +
+  theme_minimal()
+
+# Muestra el gráfico
+print(grafico)
+```
+
+
+```{r warning=FALSE}
+
+# Ajustar el modelo Random Forest con datos de entrenamiento
+modelo_random_forest <- randomForest(Anom_Anual ~ Anio, data = datos_entrenamiento, ntree = 100, max.depth = 10)
+
+
+# Hacer predicciones en datos de prueba
+predicciones <- predict(modelo_random_forest, newdata = datos_test)
+
+# Evaluar el rendimiento del modelo (en un problema de regresión)
+# error cuadrático medio (MSE) y coeficiente de determinación (R^2)
+error_cuadratico_medio <- mean((predicciones - datos_test$Anom_Anual)^2)
+coeficiente_determinacion <- cor(predicciones, datos_test$Anom_Anual)^2
+
+# Visualizar las métricas
+print(paste("Error Cuadrático Medio:", error_cuadratico_medio))
+print(paste("Coeficiente de Determinación:", coeficiente_determinacion))
+print(predicciones)
+
+```
+- SE observa un MSE que es bastante bajo, lo cual sugiere que las predicciones del modelo están bastante cerca de los valores reales en promedio. 
+
+- El R^2 nos da el valor porcentual alrededor del cual la variabilidad en las anomalías de temperatura anual se explica por el modelo. Se considera entonces un buen ajuste en este caso.
+
+
+```{r}
+# Generar un conjunto de datos con los años deseados
+nuevos_anios <- data.frame(Anio = 2024:2100)
+
+# Paso 2: Hacer predicciones con el modelo
+predicciones_nuevos_anios <- predict(modelo_random_forest, newdata = nuevos_anios)
+print(predicciones_nuevos_anios)
+```
+```{r}
+# Graficar
+grafico_predicciones <- ggplot() +
+  geom_line(data = datos_entrenamiento, aes(x = Anio, y = Anom_Anual), color = "blue") +
+  geom_line(data = datos_test, aes(x = Anio, y = Anom_Anual), color = "red") +
+  geom_line(data = data.frame(Anio = nuevos_anios$Anio, Anom_Anual = predicciones_nuevos_anios), aes(x = Anio, y = Anom_Anual), color = "green", linetype = "dashed") +
+  
+  labs(title = "Comparación de Datos de Entrenamiento, Prueba y Predicciones",
+       x = "Año",
+       y = "Anomalías") +
+  theme_minimal()
+
+# Muestra el gráfico
+print(grafico_predicciones)
+```
+
+Y aunque se viera anteriormente que el ajuste era bueno, se observa una predicción que no refleja la tendencia creaciente de los últimos años en las temperaturas.
+
+```{r}
+# Entrenar el modelo
+modelo_rf <- randomForest(Anom_Anual ~ ., data = datos_entrenamiento, ntree = 500)
+
+# Realizar predicciones en el conjunto de entrenamiento y prueba
+predicciones_entrenamiento <- predict(modelo_rf, newdata = datos_entrenamiento)
+predicciones_test <- predict(modelo_rf, newdata = datos_test)
+
+# Calcular el error en el conjunto de entrenamiento y prueba
+error_entrenamiento <- mean((datos_entrenamiento$Anom_Anual - predicciones_entrenamiento)^2)
+error_test <- mean((datos_test$Anom_Anual - predicciones_test)^2)
+
+print(paste("Error Cuadrático Medio en Entrenamiento:", error_entrenamiento))
+print(paste("Error Cuadrático Medio en Prueba:", error_test))
+
+```
+
+```{r}
+# Ajustar el modelo de Random Forest con diferentes valores de ntree y max.depth
+modelo_rf1 <- randomForest(Anom_Anual ~ Anio, data = Temp_Global_Averages_1850_max, ntree = 800, max.depth = 40)
+modelo_rf2 <- randomForest(Anom_Anual ~ Anio, data = Temp_Global_Averages_1850_max, ntree = 50, max.depth = 5)
+
+# Hacer predicciones con los modelos ajustados
+predicciones_rf1 <- predict(modelo_rf1, newdata = Temp_Global_Averages_1850_max)
+predicciones_rf2 <- predict(modelo_rf2, newdata = Temp_Global_Averages_1850_max)
+
+# Visualizar resultados en un gráfico
+plot(Temp_Global_Averages_1850_max$Anio, Temp_Global_Averages_1850_max$Anom_Anual, col = "blue", pch = 16, xlab = "Año", ylab = "Anomalía de Temperatura Anual", main = "Random Forest - Predicciones vs. Datos Reales")
+
+points(Temp_Global_Averages_1850_max$Anio, predicciones_rf1, col = "red", pch = 16)
+points(Temp_Global_Averages_1850_max$Anio, predicciones_rf2, col = "green", pch = 16)
+
+legend("topright", legend = c("Datos Reales", "Predicciones (ntree=100, depth=10)", "Predicciones (ntree=500, depth=20)"), col = c("blue", "red", "green"), pch = 16)
+
+```
+- Se ha podido comprobar que el error en el conjunto de prueba es más alto que en el conjunto de entrenamiento, lo cual es un buen indicativo de que no hay sobreajuste significativo. Por lo tanto, según los errores cuadráticos medios , el modelo parece estar generalizando bien a nuevos datos.
+- Además también se han probado a modificar los hiperparámetros en el modelo de Random Forest, ajustando el número de árboles (ntree), y la profundidad máxima de los árboles (max.depth),
+- Entonces este modelo no servirá para reflejar el comportamiento real del aumento de temperartura futuro.
+
+
+## Arima
+En numerosos artículos científicos se encuentra el modelo ARIMA aplicado al estudio predictivo de datos de temperatura. Se aplicará también este modelo en el estudio que se está realizando en este TF.
+```{r}
+# Ordenar el conjunto de datos por la columna "Anio" en orden creciente
+Temp_Global_Averages_1850_max <- Temp_Global_Averages_1850_max[order(Temp_Global_Averages_1850_max$Anio), ]
+
+# Verificar que el conjunto de datos esté ordenado correctamente
+head(Temp_Global_Averages_1850_max)
+```
+
+
+
+```{r}
+# Convertir el dataframe a una serie temporal con frecuencia anual
+serie_temporal <- ts(Temp_Global_Averages_1850_max$Anom_Anual, start = 1850, frequency = 1)
+```
+
+Utilizando la función auto.arima del paquete forecast se ajusta automáticamente un modelo ARIMA a la serie temporal obtenida. Esta función selecciona automáticamente el modelo ARIMA óptimo. 
+
+```{r}
+# Ajustar un modelo ARIMA
+modelo_arima <- auto.arima(serie_temporal)
+```
+
+Se estudia la idoneidad del modelo obtenido
+
+```{r}
+# CAlcular residuos
+residuos_arima <- resid(modelo_arima)
+# Calcular la media de los residuos
+media_residuos <- mean(residuos_arima)
+# Imprimir la media de los residuos
+cat("La media de los residuos es:", media_residuos, "\n")
+
+```
+Es un buen dato para el ajuste del modelo usado observar que la media es muy cercana a 0.
+
+
+```{r}
+# Calcular la varianza de los residuos
+varianza_residuos <- var(residuos_arima)
+
+# Imprimir la varianza de los residuos
+cat("La varianza de los residuos es:", varianza_residuos, "\n")
+
+```
+TAmbién es un valor bajo, lo cual indca que los residuos están relativamente cerca de la media, tal y como hemos visto. Es una evidencia más de la buena precisión del modelo.
+
+```{r}
+# Obtener residuos
+residuos_arima <- residuals(modelo_arima)
+
+# Gráfico de residuos a lo largo del tiempo
+plot(residuos_arima, main = "Residuos del Modelo ARIMA", xlab = "Tiempo", ylab = "Residuos")
+
+```
+Se grafican los residuos contra los valores ajustados. 
+
+```{r}
+plot(modelo_arima$residuals, fitted(modelo_arima))
+```
+
+No hay patrones sistemáticos en la dispersión de los residuos a lo largo de los valores ajustados, eso sugiere homocedasticidad en los residuos, lo cual es ideal para el modelo ARIMA (varianza constante) para que las predicciones sean confiables y se cumplan las suposiciones del modelo. Se sabe que la homocedasticidad implica que la variabilidad de los errores es constante en todos los niveles de la variable predictora.
+
+
+Se estudia también la distribución de los residuos
+
+```{r}
+hist(residuos_arima, main = "Histograma de Residuos", xlab = "Residuos")
+qqnorm(residuos_arima)
+qqline(residuos_arima)
+```
+
+Se observa una distribucion normal en los residuos, y además, el gráfico QQ sigue casi una linea recta. Más evidencias de la bondad del modelo ARIMA.
+
+
+Los gráficos de ggtsdisplay muestran la serie temporal, la función de autocorrelación (ACF) y la función de autocorrelación parcial (PACF) de una serie temporal. Se visualizan a continuación.
+```{r}
+ggtsdisplay(serie_temporal,main='Anomalías temperaturas')
+```
+
+```{r}
+# Obtener los criterios de información
+aic <- AIC(modelo_arima)
+bic <- BIC(modelo_arima)
+
+# Imprimir los resultados
+cat("AIC:", aic, "\n")
+cat("BIC:", bic, "\n")
+```
+Se observan criterios de información bayesiano (BIC) y de Akaike (AIC) bajos. Con estos valores podemos evaluar la calidad del ajuste, que parece buena.
+
+Se predicen los resultados aplicando el modelo
+```{r}
+# Hacer predicciones ajustando que sean para hasta los próximos 77 años
+predicciones_arima <- forecast(modelo_arima, h = 77)  
+
+# Visualizar resultados
+plot(predicciones_arima, main = "Predicciones con Modelo ARIMA", xlab = "Año", ylab = "Anomalía de Temperatura Anual")
+lines(serie_temporal, col = "blue", lty = 1)
+
+```
+
+
+
+```{r}
+
+# Crear un DataFrame con la predicción y los años futuros
+predicciones_df <- data.frame(
+  Anio = seq(2024, 2100),
+  Prediccion = as.numeric(predicciones_arima$mean)
+)
+
+# Visualizar los primeros registros del DataFrame
+print(predicciones_df)
+
+```
+
+Se obtienen los valores resultantes con la predicción realizada para luego poder representar en PBI.
+```{r}
+# se renombra la columna
+predicciones_df <- predicciones_df %>% rename(Anom_Anual = Prediccion)
+
+# Unir dataframes por la columna "Anio"
+Temp_Global_Averages_pred_arima <- rbind(Temp_Global_Averages_1850_max, predicciones_df)
+
+
+# Visualizar los primeros registros del conjunto de datos fusionado
+head(Temp_Global_Averages_pred_arima)
+```
+
+```{r warning=FALSE}
+setwd("~/SBRG/MU/TF/Data Sources/TF_SBRG/exports/")
+# Nombre del archivo exportado: Temp_Global_Averages_pred_arima
+ write.csv(Temp_Global_Averages_pred_arima, "Temp_Global_Averages_pred_arima.csv", row.names = TRUE)
+```
+
+
+```{r warning=FALSE}
+nuevos_nombres <- c("anio", "Anom_Anual_arima")
+colnames(Temp_Global_Averages_pred_arima) <- nuevos_nombres
+Temp_Global_Averages_pred_arima_filter <- Temp_Global_Averages_pred_arima %>% filter(anio >= '1990' & anio <='2050')
+
+datos_real_pred <- merge (datos_real_pred, Temp_Global_Averages_pred_arima_filter, by = "anio")
+
+setwd("~/SBRG/MU/TF/Data Sources/TF_SBRG/exports/")
+# Nombre del archivo exportado: datos_real_pred.csv
+ write.csv(datos_real_pred, "datos_real_pred.csv", row.names = TRUE)
+
+```
+
+
+# Conclusiones conjuntas
+
+## Predicción variables
+- Aunque se ha intentado introducir las variables aquí estudidadas para deducir la temperatura de los próximos años, era de esperar, tras el estudio de las variables, que no fuera así, ya que hemos visto que existe un fuerte correlación entre todas ellas.
+- Se presenta entonces un escenario de multicolinealidad, ya que las variables predictoras están altamente correlacionadas entre sí. Por ello, solo se ha tenido en cuenta en el método de predicción de valores la variable tiempo, mediante la cual calculamos los valores esperados en el futuro.
+- El comportamiento de todas las variables aquí estudiadas puede explicarse mediante un modelo de regresión lineal, crecient.
+- Además, se ha comprobados que las variables están fuertemente relacionadas en cuanto a su tendencia en el comportamiento, por lo que tenderán a crecer de manera conjunta (aunque cada una a su ritmo correspondiente, según sus pendientes).
+- Por lo tanto, está claro que si no cambiamos la forma de vida del ser humano y el uso de los recursos del Planeta, solo cabe esperar un aumento de la temperatura y muchas más emisiones derivadas de la agricultura.
+- Aunque es cierto que no necesitamos tanta tierra para producir los mismos alimentos (se observa que lejos de crecer la extensión de tierra, incluso ha disminuido), quizás esto empeore la situación porque se deduce que los métodos usados están generando más emisiones. De hecho, en el análisis se observa que aunque hubo una época de estabilización de emisiones, estas se han disparado nuevamente en los últimos años.
+
+## Tierra cultivada
+  - La intensificación de la agricultura en los últimos años, es una realidad. La agricultura moderna ha logrado aumentar la productividad de la tierra a través del uso de nuevas tecnologías, como la mecanización, la fertilización y el control de plagas. Esto ha permitido a los agricultores producir más alimentos con menos tierra.
+  - Aunque haya disminuido la extensión tierra cultivada, hay que atender a los métodos usados.Se produce ahora más alimentos aun con menos extensión de tierra dedicada a la agricultura a nivel mundial. La producción mundial de alimentos ha aumentado un 70% desde 1961, mientras que la superficie agrícola ha aumentado solo un 12%. Hay una producción de más alimentos por unidad de tierra gracias a que con los nuevos métodos se obtienen mayores rendimientos.
+  - El uso de nuevas tecnologías también ha permitido a los agricultores cultivar en zonas que antes eran improductivas. Por ejemplo, el desarrollo de variedades de cultivos resistentes a la sequía ha permitido a los agricultores cultivar en zonas más secas.
+  - La mejora de las prácticas agrícolas también ha contribuido al aumento de la productividad. Por ejemplo, la rotación de cultivos ayuda a mantener la fertilidad del suelo y reduce la necesidad de fertilizantes.
+  - Es por todo ello por lo que, aunque haya un aumento de población constante, la agricultura ha podido satisfacer la creciente demanda de alimentos
+  - Sin embargo, no todo es positivo. Es importante señalar que la intensificación de la agricultura puede tener un impacto negativo en el medio ambiente. El uso excesivo de fertilizantes y pesticidas lleva a la contaminación, y esto conduce a temperaturas mas elevadas. Es evidente, por ejemplo, como los fertilizantes nitrogenados, que sirven para favorecer el crecimiento de las plantas, son los que  presentan un comportamineto de crecimiento constante en cuanto al uso. Será entonces importante encontrar formas de aumentar la productividad de la agricultura de forma sostenible.
+
+  
