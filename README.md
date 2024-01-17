@@ -3,4 +3,12 @@ Este git corresponde al repositorio creado para el TFM (Trabajo Final de Máster
 
 Título del TFM:  CULTIVOS Y CLIMATOLOGÍA. Situación Mundial.
 
-Autora del TFM: Sara Belén Ramos González 
+Autora del TFM: Sara Belén Ramos González.
+
+TFM - Área 5 - Aula 1
+ 
+Tutor/a de TF 
+Rafael Luque Ocaña
+
+Profesor/a responsable de la asignatura
+Albert Solé
