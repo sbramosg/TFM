@@ -1,4 +1,5 @@
 # TFM
+**Descripción repositorio:**
 Este repositorio de GitHub corresponde al repositorio creado para el Trabajo Final de Máster (TFM) del Máster Universitario en Ciencia de Datos de la UOC del curso académico 2024-2025.
 
 *Título del TFM:  CULTIVOS Y CLIMATOLOGÍA. Situación Mundial.*
@@ -11,7 +12,7 @@ Tutor/a de TF: Rafael Luque Ocaña
 
 Profesor/a responsable de la asignatura: Albert Solé
 
-**Contenido del repositorio:**
+**Contenido repositorio:**
 - Memoria del TFM en formato pdf.
 - Archivos de datos obtenidos desde las fuentes elegidas para este TFM, en los formatos correspondientes (csv, xlsx).
 - Código de implementación del TFM en lenguaje R, así como su ejecución en formato html.
