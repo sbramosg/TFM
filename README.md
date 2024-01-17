@@ -7,8 +7,6 @@ Autora del TFM: Sara Belén Ramos González.
 
 TFM - Área 5 - Aula 1
  
-Tutor/a de TF 
-Rafael Luque Ocaña
+Tutor/a de TF: Rafael Luque Ocaña
 
-Profesor/a responsable de la asignatura
-Albert Solé
+Profesor/a responsable de la asignatura: Albert Solé
