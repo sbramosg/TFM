@@ -18,3 +18,4 @@ Profesor/a responsable de la asignatura: Albert Solé
 - Archivos de datos obtenidos desde las fuentes elegidas para este TFM, en los formatos correspondientes (csv, xlsx).
 - Código de implementación del TFM en lenguaje R, así como su ejecución en formato html.
 - Url de acceso al informe de visualización: https://app.powerbi.com/view?r=eyJrIjoiYTBlYWI1M2ItYjc5Yi00OTY5LWI0ZDMtYjllM2Y4YzRjMTBlIiwidCI6IjZiMDEyOGNiLWQ1MjctNDQ3NS1hNmViLTA5M2I2NTQ1OTk2MSIsImMiOjl9
+- Presentación correspondiente a la grabación audiovisual de 15 min.
