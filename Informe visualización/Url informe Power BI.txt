@@ -1,0 +1,3 @@
+Url acceso informe de Power BI:
+
+https://app.powerbi.com/view?r=eyJrIjoiYTBlYWI1M2ItYjc5Yi00OTY5LWI0ZDMtYjllM2Y4YzRjMTBlIiwidCI6IjZiMDEyOGNiLWQ1MjctNDQ3NS1hNmViLTA5M2I2NTQ1OTk2MSIsImMiOjl9
